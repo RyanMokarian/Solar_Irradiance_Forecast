@@ -38,9 +38,19 @@ class DataGenerator(object):
     """
     Generator that yields one training example at a time.
     """
-    def __init__(self, df : pd.DataFrame, image_size : int):
+    def __init__(self, df: pd.DataFrame, image_size: int):
         self.df = df
         self.image_size = image_size
+        self.images_mean = {'ch1': 0.3468688165685162, # Only computed on 1000 images
+                            'ch2': 275.5753293800354, 
+                            'ch3': 232.39877619552612, 
+                            'ch4': 265.73306348800656, 
+                            'ch6': 247.41427294921874}
+        self.images_std = {'ch1': 0.33563879357773235, # Only computed on 1000 images
+                           'ch2': 55.67595455452795, 
+                           'ch3': 45.48937366531559, 
+                           'ch4': 54.87321495208064, 
+                           'ch6': 49.542866681673615}
         self.stations = {'BND':(40.05192,-88.37309),
                          'TBL':(40.12498,-105.2368),
                          'DRA':(36.62373,-116.01947),
@@ -85,8 +95,9 @@ class DataGenerator(object):
                     pixels = self.image_size//2
                     adjustement = self.image_size % 2 # Adjustement if image_size is odd
                     cropped_images = []
-                    for img in images:
+                    for img, mean, std in zip(images, self.images_mean.values(), self.images_std.values()):
                         # TODO : Check if the slice is out of bounds
+                        img = (img - mean)/std # Normalize image
                         cropped_images.append(img[pixel_coords[0]-pixels:pixel_coords[0]+pixels+adjustement,
                                           pixel_coords[1]-pixels:pixel_coords[1]+pixels+adjustement])
                     cropped_images = tf.convert_to_tensor(np.array(cropped_images))
