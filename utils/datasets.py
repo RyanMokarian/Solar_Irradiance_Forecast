@@ -3,10 +3,12 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 if __name__ == "__main__":
     import utils
-    import preprocessing
+    import pickle
+    from tqdm import tqdm
 else:
 # ------------------------------------------------------ #
     from utils import utils
+import os
 import tensorflow as tf
 import numpy as np
 import pandas as pd
@@ -16,8 +18,8 @@ class SolarIrradianceDataset(tf.data.Dataset):
     """
     Dataset that loads satellite imagery from HDF5 files.
     """    
-    def __new__(cls, df : pd.DataFrame, image_size : int):
-        return tf.data.Dataset.from_generator(DataGenerator(df, image_size).get_next_example,
+    def __new__(cls, df : pd.DataFrame, image_size : int, data_path: str = None):
+        return tf.data.Dataset.from_generator(DataGenerator(df, image_size, data_path).get_next_example,
                                             output_types={'hdf5_8bit_path': tf.string,
                                                         'hdf5_8bit_offset': tf.int32,
                                                         'station_name': tf.string,
@@ -33,15 +35,16 @@ class SolarIrradianceDataset(tf.data.Dataset):
                                                         'station_long': tf.TensorShape([]),
                                                         'images': tf.TensorShape([5, image_size, image_size]),
                                                         'csky_ghi': tf.TensorShape([]),
-                                                        'ghi': tf.TensorShape([])})
+                                                        'ghi': tf.TensorShape([])}).prefetch(tf.data.experimental.AUTOTUNE)
 
 class DataGenerator(object):
     """
     Generator that yields one training example at a time.
     """
-    def __init__(self, df: pd.DataFrame, image_size: int):
+    def __init__(self, df: pd.DataFrame, image_size: int, data_path: str):
         self.df = df
         self.image_size = image_size
+        self.data_path = data_path
         self.images_mean = {'ch1': 0.3154958181516178, 'ch2': 274.18017705595855, 
                             'ch3': 230.33078484969695, 'ch4': 264.2658065947056, 
                             'ch6': 245.69855600075982}
@@ -59,7 +62,7 @@ class DataGenerator(object):
         # Iterate over all rows of the dataframe
         open_path = None
         for index, row in self.df.iterrows():
-            hdf5_8bit_path = row['hdf5_8bit_path']
+            hdf5_8bit_path = row['hdf5_8bit_path'] if self.data_path is None else os.path.join(self.data_path, row['hdf5_8bit_path'].split('/')[-1])
             hdf5_8bit_offset = row['hdf5_8bit_offset']
             
             # Open hdf5 file if it is not already opened
@@ -123,7 +126,7 @@ import time
 
 def benchmark(dataset, num_examples=100):
     start_time = time.perf_counter()
-    for i, sample in enumerate(dataset):
+    for i, sample in enumerate(tqdm(dataset, desc='Benchmarking', total=num_examples)):
         time.sleep(0.01) # Simulating a training step
         if i >= num_examples:
             break
@@ -133,9 +136,20 @@ def benchmark(dataset, num_examples=100):
     print("Number of example per second:", 1 / (total_time/num_examples))
                     
 if __name__ == "__main__":
+    
+    print('Reading dataframe...')
     df = pd.read_pickle('/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl')
-    df = preprocessing.preprocess(df)
-    benchmark(SolarIrradianceDataset(df,20)
-    .prefetch(tf.data.experimental.AUTOTUNE), num_examples=1000)
-
+    
+    # Drop unavailable data
+    available_col = pickle.load(open('../data/available_col.pkl', 'rb'))
+    pd.options.mode.chained_assignment = None # Disable chained_assignment warning for the assignement operation
+    df.drop(available_col[available_col==0].index, inplace=True)
+    pd.options.mode.chained_assignment = 'warn' # Turn warning back on
+    df = df.dropna()
+    
+    # Copy files to compute node
+    path = utils.copy_files(data_path='/project/cq-training-1/project1/data/', hdf5_folder='hdf5v7_8bit')
+    
+    benchmark(SolarIrradianceDataset(df,image_size=20, data_path=path), num_examples=1000)
+    #
 

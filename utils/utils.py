@@ -13,8 +13,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import tqdm
+import shutil
+from tqdm import tqdm
 
+def copy_files(data_path: str, hdf5_folder: str):
+    """ This function copies the data files to the $SLURM_TMPDIR directory.
+    """
+    # Copy files to $SLURM_TMPDIR
+    src = os.path.join(data_path,hdf5_folder)
+    dest = os.path.join(os.environ['SLURM_TMPDIR'],hdf5_folder)
+    if not os.path.exists(dest):
+        os.mkdir(dest)
+        print(f'Copying data from \"{src}\" to \"{dest}\"...')
+        for item in tqdm(os.listdir(src)):
+            shutil.copy(os.path.join(src,item), dest)
+    return dest
 
 def get_label_color_mapping(idx):
     """Returns the PASCAL VOC color triplet for a given label index."""
