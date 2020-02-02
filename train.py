@@ -1,5 +1,6 @@
 import os
 import fire
+import datetime
 import pandas as pd
 from models import baselines
 from utils.datasets import SolarIrradianceDataset
@@ -13,6 +14,13 @@ import tensorflow as tf
 DATA_PATH = '/project/cq-training-1/project1/data/'
 HDF5_8BIT = 'hdf5v7_8bit'
 VALID_PERC = 0.2
+
+# Setup writers for tensorboard
+current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
+test_log_dir = 'logs/gradient_tape/' + current_time + '/valid'
+train_summary_writer = tf.summary.create_file_writer(train_log_dir)
+test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
 #@tf.function
 def train_epoch(model, data_loader, batch_size, loss_function, optimizer):
@@ -90,10 +98,16 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     for epoch in range(epochs):
         train_loss = train_epoch(model, dataloader_train, batch_size, mse, optimizer)
         valid_loss, csky_valid_loss = test_epoch(model, dataloader_valid, batch_size, mse)
-        print(f'Epoch {epoch} - Train Loss : {train_loss}, Valid Loss : {valid_loss}')
+        
+        # Logs
+        print(f'Epoch {epoch} - Train Loss : {train_loss:.4f}, Valid Loss : {valid_loss:.4f}')
         losses['train'].append(train_loss.numpy())
         losses['valid'].append(valid_loss.numpy())
-    
+        with train_summary_writer.as_default():
+            tf.summary.scalar('loss', train_loss.numpy(), step=epoch)
+        with test_summary_writer.as_default():
+            tf.summary.scalar('loss', valid_loss.numpy(), step=epoch)
+            
     # Plot losses
     plots.plot_loss(losses['train'], losses['valid'], csky_valid_loss.numpy())
     

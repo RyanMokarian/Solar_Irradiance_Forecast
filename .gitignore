@@ -1,4 +1,5 @@
 # Extra
+logs/
 visualization/
 *.ipynb
 
