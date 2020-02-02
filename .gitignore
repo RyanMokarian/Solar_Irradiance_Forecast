@@ -1,6 +1,6 @@
 # Extra
 logs/
-visualization/
+visualizations/
 *.ipynb
 
 # Byte-compiled / optimized / DLL files
