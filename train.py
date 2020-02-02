@@ -5,6 +5,7 @@ from models import baselines
 from utils.datasets import SolarIrradianceDataset
 from utils import preprocessing
 from utils import utils
+from utils import plots
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
 import tensorflow as tf
@@ -85,10 +86,16 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     
     # Training loop
     print('Training...')
+    losses = {'train' : [], 'valid' : []}
     for epoch in range(epochs):
         train_loss = train_epoch(model, dataloader_train, batch_size, mse, optimizer)
         valid_loss, csky_valid_loss = test_epoch(model, dataloader_valid, batch_size, mse)
         print(f'Epoch {epoch} - Train Loss : {train_loss}, Valid Loss : {valid_loss}')
+        losses['train'].append(train_loss.numpy())
+        losses['valid'].append(valid_loss.numpy())
+    
+    # Plot losses
+    plots.plot_loss(losses['train'], losses['valid'], csky_valid_loss.numpy())
     
 if __name__ == "__main__":
     fire.Fire(main)

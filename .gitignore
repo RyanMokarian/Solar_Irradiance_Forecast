@@ -1,4 +1,5 @@
 # Extra
+visualization/
 *.ipynb
 
 # Byte-compiled / optimized / DLL files
