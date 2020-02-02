@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pickle
 
@@ -10,8 +11,8 @@ def preprocess(df: pd.DataFrame):
     Returns:
         pd.DataFrame -- Preprocessed dataframe
     """
+    df = df.dropna()
     df = drop_unavailable_index(df)
-    df = df.dropna() 
     df = normalize_ghi(df)
     # TODO : Shuffle dataframe while keeping days together
     return df
@@ -43,10 +44,6 @@ def normalize_ghi(df: pd.DataFrame):
 def drop_unavailable_index(df: pd.DataFrame):
     """Drops rows where file information is unavailable
     """
-    available_col = pickle.load(open('data/available_col.pkl', 'rb'))
-
-    pd.options.mode.chained_assignment = None # Disable chained_assignment warning for the assignement operation
-    df.drop(available_col[available_col==0].index, inplace=True)
-    pd.options.mode.chained_assignment = 'warn' # Turn warning back on
-    
+    df = df.replace('nan',np.NaN)
+    df = df.dropna()
     return df
