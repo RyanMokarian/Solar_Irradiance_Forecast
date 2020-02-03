@@ -151,19 +151,12 @@ def main(subset_size:int=300,
     print('Reading dataframe...')
     df = pd.read_pickle('/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl')
     
-    # Drop unavailable data
-#     available_col = pickle.load(open('../data/available_col.pkl', 'rb'))
-#     pd.options.mode.chained_assignment = None # Disable chained_assignment warning for the assignement operation
-#     df.drop(available_col[available_col==0].index, inplace=True)
-#     pd.options.mode.chained_assignment = 'warn' # Turn warning back on
-#     df = df.dropna()
-
     # Just call preprocessing
     df = preprocessing.preprocess(df)
-        
-    #subset
-    df = df.iloc[:subset_size]
     
+    # subset
+    df = df.iloc[:subset_size]
+        
     # Copy files to compute node
     path = utils.copy_files(data_path='/project/cq-training-1/project1/data/', hdf5_folder='hdf5v7_8bit') if copy_data else '/project/cq-training-1/project1/data/hdf5v7_8bit'
     
