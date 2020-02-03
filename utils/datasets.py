@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 import h5py
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
 
 class SolarIrradianceDataset(tf.data.Dataset):
     """
@@ -170,5 +169,6 @@ def main(subset_size:int=300,
 
     
 if __name__ == "__main__":
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
     fire.Fire(main)
 
