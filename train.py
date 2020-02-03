@@ -74,9 +74,9 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     
     # Create model
     if model == 'dummy':
-        model = baselines.DummyModel(image_size)
-    elif model == 'another model name':
-        pass # TODO : add new models here
+        model = baselines.DummyModel()
+    elif model == 'sunset':
+        model = baselines.SunsetModel()
     else:
         raise Exception(f'Model \"{model}\" not recognized.')
         
