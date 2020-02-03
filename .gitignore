@@ -1,4 +1,5 @@
 # Extra
+saved_model/
 logs/
 visualizations/
 *.ipynb

@@ -16,6 +16,22 @@ import tensorflow as tf
 import shutil
 from tqdm import tqdm
 
+SAVED_MODEL_DIR = 'saved_model'
+
+def create_folder(path: str):
+    """ This function creates a folder if it does not already exists.
+    """
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+def save_model(model: tf.keras.Model):
+    """ This function saves the model to disk.
+    """
+    create_folder(SAVED_MODEL_DIR)
+    model_path = os.path.join(SAVED_MODEL_DIR, model.__class__.__name__)
+    create_folder(model_path)
+    model.save_weights(os.path.join(model_path, "model"))
+
 def copy_files(data_path: str, hdf5_folder: str):
     """ This function copies the data files to the $SLURM_TMPDIR directory.
     """

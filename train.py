@@ -55,7 +55,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          lr: float = 1e-4 , 
          batch_size: int = 100,
          subset_perc: float = 1,
-         copy_data: bool = False
+         copy_data: bool = False,
+         saved_model_dir: str = None
         ):
     
     # Copy data to the compute node
@@ -73,11 +74,15 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     
     # Create model
     if model == 'dummy':
-        model = baselines.DummyModel()
+        model = baselines.DummyModel(image_size)
     elif model == 'another model name':
         pass # TODO : add new models here
     else:
         raise Exception(f'Model \"{model}\" not recognized.')
+        
+    # Load model weights
+    if saved_model_dir is not None:
+        model.load_weights(os.path.join(saved_model_dir, "model"))
     
     # Loss and optimizer
     mse = tf.keras.losses.MeanSquaredError()
@@ -95,9 +100,13 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     # Training loop
     print('Training...')
     losses = {'train' : [], 'valid' : []}
+    best_valid_loss = float('inf')
     for epoch in range(epochs):
         train_loss = train_epoch(model, dataloader_train, batch_size, mse, optimizer)
         valid_loss, csky_valid_loss = test_epoch(model, dataloader_valid, batch_size, mse)
+        if valid_loss.numpy() < best_valid_loss:
+            best_valid_loss = valid_loss.numpy()
+            utils.save_model(model)
         
         # Logs
         print(f'Epoch {epoch} - Train Loss : {train_loss:.4f}, Valid Loss : {valid_loss:.4f}')
