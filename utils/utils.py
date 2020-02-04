@@ -38,6 +38,10 @@ def copy_files(data_path: str, hdf5_folder: str):
     # Copy files to $SLURM_TMPDIR
     src = os.path.join(data_path,hdf5_folder)
     dest = os.path.join(os.environ['SLURM_TMPDIR'],hdf5_folder)
+    # if path exists check if all files are present, in case where  copying breaks down:
+    if os.path.exists(dest) and sum(1 for f in os.listdir(dest) if f[-3:] == '.h5') != len(os.listdir(src)):
+        print(f'Deleting: {dest}')
+        shutil.rmtree(dest)
     if not os.path.exists(dest):
         os.mkdir(dest)
         print(f'Copying data from \"{src}\" to \"{dest}\"...')

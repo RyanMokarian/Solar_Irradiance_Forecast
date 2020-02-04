@@ -11,8 +11,10 @@ def preprocess(df: pd.DataFrame):
     Returns:
         pd.DataFrame -- Preprocessed dataframe
     """
+    # Drops rows where file information is unavailable
+    df = df.replace('nan',np.NaN)
     df = df.dropna()
-    df = drop_unavailable_index(df)
+
     df = normalize_ghi(df)
     # TODO : Shuffle dataframe while keeping days together
     return df
@@ -39,11 +41,4 @@ def normalize_ghi(df: pd.DataFrame):
 
     # TODO : Save mean and std to inverse normalization of predictions later
     
-    return df
-
-def drop_unavailable_index(df: pd.DataFrame):
-    """Drops rows where file information is unavailable
-    """
-    df = df.replace('nan',np.NaN)
-    df = df.dropna()
     return df

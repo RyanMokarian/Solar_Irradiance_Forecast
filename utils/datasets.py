@@ -5,6 +5,9 @@ if __name__ == "__main__":
     import utils
     import pickle
     from tqdm import tqdm
+    import preprocessing
+    import time
+    import fire
 else:
 # ------------------------------------------------------ #
     from utils import utils
@@ -13,6 +16,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import h5py
+
 
 class SolarIrradianceDataset(tf.data.Dataset):
     """
@@ -122,34 +126,49 @@ class DataGenerator(object):
 
 
 # ----- Code to benchmark dataset efficency ----- #
-import time
 
-def benchmark(dataset, num_examples=100):
+# change examples to epochs to check if caching helps, need to iterate entirety
+# https://www.tensorflow.org/api_docs/python/tf/data/Dataset#cache
+
+def benchmark(dataset,epochs=3):
     start_time = time.perf_counter()
-    for i, sample in enumerate(tqdm(dataset, desc='Benchmarking', total=num_examples)):
-        time.sleep(0.01) # Simulating a training step
-        if i >= num_examples:
-            break
+    for j in tqdm(range(epochs)):
+        for sample in tqdm(dataset, desc=f'Epoch: {j}'):
+            time.sleep(0.01) # Simulating a training step
+            
     total_time = time.perf_counter() - start_time
     print("Execution time:", total_time)
-    print("Execution time per example:", total_time/num_examples)
-    print("Number of example per second:", 1 / (total_time/num_examples))
-                    
-if __name__ == "__main__":
+    #print("Execution time per example:", total_time/(num_examples*epochs))
+    #print("Number of example per second:", 1 / (total_time/(num_examples*epochs)))
+    
+def main(subset_size:int=300,
+         epochs:int=3,
+         do_cache:bool=True,
+         copy_data:bool=False): 
+    
     
     print('Reading dataframe...')
     df = pd.read_pickle('/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl')
     
-    # Drop unavailable data
-    available_col = pickle.load(open('../data/available_col.pkl', 'rb'))
-    pd.options.mode.chained_assignment = None # Disable chained_assignment warning for the assignement operation
-    df.drop(available_col[available_col==0].index, inplace=True)
-    pd.options.mode.chained_assignment = 'warn' # Turn warning back on
-    df = df.dropna()
+    # Just call preprocessing
+    df = preprocessing.preprocess(df)
     
+    # subset
+    df = df.iloc[:subset_size]
+        
     # Copy files to compute node
-    path = utils.copy_files(data_path='/project/cq-training-1/project1/data/', hdf5_folder='hdf5v7_8bit')
+    path = utils.copy_files(data_path='/project/cq-training-1/project1/data/', hdf5_folder='hdf5v7_8bit') if copy_data else '/project/cq-training-1/project1/data/hdf5v7_8bit'
     
-    benchmark(SolarIrradianceDataset(df,image_size=20, data_path=path), num_examples=1000)
-    #
+    
+    # Now try with and without caching, tremendous improvement
+    if do_cache:
+        benchmark(SolarIrradianceDataset(df,image_size=20, data_path=path).cache(), epochs=epochs)
+    else:
+        benchmark(SolarIrradianceDataset(df,image_size=20, data_path=path), epochs=epochs)
+        
+
+    
+if __name__ == "__main__":
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
+    fire.Fire(main)
 
