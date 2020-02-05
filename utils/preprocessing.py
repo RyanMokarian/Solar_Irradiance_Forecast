@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pickle
+import random
 
 def preprocess(df: pd.DataFrame):
     """Apply preprocessing steps on the pandas dataframe.
@@ -16,7 +17,7 @@ def preprocess(df: pd.DataFrame):
     df = df.dropna()
 
     df = normalize_ghi(df)
-    # TODO : Shuffle dataframe while keeping days together
+    df = shuffle_df(df)
     return df
 
 def normalize_ghi(df: pd.DataFrame):
@@ -42,3 +43,21 @@ def normalize_ghi(df: pd.DataFrame):
     # TODO : Save mean and std to inverse normalization of predictions later
     
     return df
+
+def shuffle_df(df: pd.DataFrame):
+    """Shuffle the dataframe while keeping days together
+    
+    Arguments:
+        df {pd.DataFrame} -- Catalog dataframe to standardize.
+        
+    Returns:
+        pd.DataFrame -- Shuffled dataframe 
+    
+    """
+    df['just_date'] = df.index.date
+    groups = [df for _, df in df.groupby('just_date')]
+    random.shuffle(groups)
+    df = pd.concat(groups).reset_index(drop=False)
+    df = df.drop('just_date', axis=1).set_index('iso-datetime')
+    return df
+    
