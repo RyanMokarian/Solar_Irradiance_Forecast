@@ -77,6 +77,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         model = baselines.DummyModel()
     elif model == 'sunset':
         model = baselines.SunsetModel()
+    elif model == 'ConvModel_30_15_7_3_3':
+        model = baselines.ConvModel_30_15_7_3_3()
     else:
         raise Exception(f'Model \"{model}\" not recognized.')
         
