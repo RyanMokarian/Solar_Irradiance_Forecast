@@ -6,8 +6,7 @@ import math
 import os
 import shutil
 import tarfile
-from utils import copy_files
-import fire
+import utils
 
 from pathlib import Path
 Path.ls = lambda x:list(x.iterdir())
@@ -32,7 +31,6 @@ def create_crops(df,stations = stations ,size = 20,dest='.'):
         if f_name != str(index.date()): # if date's don't match save
             if curr_day: # save only if current data is not empty
                 new_idx = new_idx+list(range(len(curr_day))) # append new index mapping
-                print (curr_day.shape)
                 np.save(dest/f_name,np.array(curr_day),allow_pickle=False,fix_imports=False) 
             curr_day = [] # reset current day data
             f_name = str(index.date()) # new-file-name
@@ -53,7 +51,11 @@ def create_crops(df,stations = stations ,size = 20,dest='.'):
             pixel_loc = (np.argmin(np.abs(lats - coords[0])), np.argmin(np.abs(lons - coords[1])))
             crops.append(images[:,pixel_loc[0]-pixels:pixel_loc[0]+pixels,pixel_loc[1]-pixels:pixel_loc[1]+pixels])
         curr_day.append(np.array(crops)) # observations/day x stations x Channels x crop-size x crop-size
-        
+    
+    # Save the last file
+    if curr_day:
+        new_idx = new_idx+list(range(len(curr_day))) # append new index mapping
+        np.save(dest/f_name,np.array(curr_day),allow_pickle=False,fix_imports=False) 
     np.save(dest/'new_index',np.array(new_idx),allow_pickle=False,fix_imports=False) # save the new-index
     if missing_data: print(f"These rows are missing: {missing_data}")
     return missing_data
@@ -61,10 +63,15 @@ def create_crops(df,stations = stations ,size = 20,dest='.'):
 
 
 
-def get_crops(df:pd.DataFrame,stations:dict,size:int=20,use_slurm = True):
-    """Calls create_crops, tars and copies data into SLURM"""
-    dest = os.environ["SLURM_TMPDIR"] if use_slurm else '.'
-    tmp = Path(dest)/f'crops-{size}'
+def get_crops(df:pd.DataFrame,stations:dict,size:int=20,use_slurm = True,dest=None):
+    
+    """ Checks for data at /project/cq-training-1/project1/teams/team12/
+    creates and tars if missing.
+    optionally copies to SLURM  or dest 
+    """
+    
+    dest = os.environ["SLURM_TMPDIR"] if use_slurm else dest
+    tmp = Path(str(dest))/f'crops-{size}'
     store = Path('/project/cq-training-1/project1/teams/team12/')
     if tmp.exists(): 
         if len(tmp.ls()) == len((store/f'crops-{size}').ls()):
@@ -76,24 +83,27 @@ def get_crops(df:pd.DataFrame,stations:dict,size:int=20,use_slurm = True):
         
     f_list = [o.name for o in store.ls()]
     if f'crops-{size}.tar' in f_list:  # If tar exists
-        print("Copying Tar")
-        shutil.copy(str(store/f'crops-{size}.tar'),dest)
-        print("Extracting")
-        with tarfile.open(Path(dest)/f'crops-{size}.tar') as tarf:
-            tarf.extractall(dest)
+        if dest:
+            print("Copying Tar")
+            shutil.copy(str(store/f'crops-{size}.tar'),dest)
+            print("Extracting")
+            with tarfile.open(Path(dest)/f'crops-{size}.tar') as tarf:
+                tarf.extractall(dest)
     elif f'crops-{size}' in f_list: # Just copy the folder
-        print("Copying Folder")
-        copy_files(str(store),f'crops-{size}')
+        if dest:
+            print("Copying Folder")
+            utils.copy_files(str(store),f'crops-{size}')
     else:     # Create the crops,tar,copy,
         print("Creating Crops")
         create_crops(df,stations,size,str(store))
         with tarfile.open(f'crops-{size}.tar','w') as tarf:
             for f in (store/f'crops-{size}').ls():
                 tarf.add(f)
-        print("Copying files")
-        shutil.copy(str(store/f'crops-{size}.tar'),dest)
-        with tarfile.open(Path(dest)/f'crops-{size}.tar') as tarf:
-            tarf.extractall()
+        if dest:
+            print("Copying files")
+            shutil.copy(str(store/f'crops-{size}.tar'),dest)
+            with tarfile.open(Path(dest)/f'crops-{size}.tar') as tarf:
+                tarf.extractall()
             
 
 def main(size:int=20,use_slurm=True):
@@ -107,4 +117,5 @@ def main(size:int=20,use_slurm=True):
     
     
 if __name__ == "__main__":
+    import fire
     fire.Fire(main)
