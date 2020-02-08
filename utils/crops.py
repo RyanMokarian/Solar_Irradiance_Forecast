@@ -63,7 +63,7 @@ def create_crops(df,stations = stations ,size = 20,dest='.'):
 
 
 
-def get_crops(df:pd.DataFrame,stations:dict,size:int=20,use_slurm = True,dest=None):
+def get_crops(df:pd.DataFrame,stations:dict=stations,size:int=20,use_slurm = True,dest=None):
     
     """ Checks for data at /project/cq-training-1/project1/teams/team12/
     creates and tars if missing.

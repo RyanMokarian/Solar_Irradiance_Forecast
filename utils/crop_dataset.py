@@ -8,7 +8,6 @@ import shutil
 import tarfile
 import utils
 import pickle
-import fire
 import time
 import tensorflow as tf
 from datetime import timedelta
@@ -16,25 +15,27 @@ from pathlib import Path
 Path.ls = lambda x:list(x.iterdir())
 
 
-
-
-
 class CropDataset(tf.data.Dataset):
     
     def __new__(cls,df:pd.DataFrame,image_size:int,use_slurm = True):
         
         return tf.data.Dataset.from_generator(CropGen(df,image_size,use_slurm).get_next_sample,
-                                         output_types={'image':tf.float32,
-                                                       'ghi':tf.float32,
-                                                       'csky':tf.float32},
-                                         output_shapes ={'image':tf.TensorShape([5,image_size,image_size]),
+                                         output_types={ 'image':tf.float32,
+                                                        'station':tf.int32,
+                                                        'ghi':tf.float32,
+                                                        'csky':tf.float32,
+                                                        'timestamp':tf.int32},
+                                         output_shapes ={'image':tf.TensorShape([None,5,image_size,image_size]),
+                                                         'station':tf.TensorShape([7]),
                                                          'ghi':tf.TensorShape([4]),
-                                                'csky':tf.TensorShape([4])}).prefetch(tf.data.experimental.AUTOTUNE)
+                                                         'csky':tf.TensorShape([None]),
+                                                         'timestamp':tf.TensorShape([None,71]),
+                                                        }).prefetch(tf.data.experimental.AUTOTUNE)
 
-    
-    
 
 class CropGen():
+    
+    #  TODO flexible crop sizes using 50x50 image as the base + 
     
     def __init__(self,df:pd.DataFrame,image_size:int,use_slurm=True):
         self.data_path = os.environ["SLURM_TMPDIR"] if use_slurm else '/project/cq-training-1/project1/teams/team12/'
@@ -42,53 +43,88 @@ class CropGen():
         self.df = df
         self.stations = ['BND','TBL','DRA','FPK','GWN', 'PSU','SXF']
         
-    def get_next_sample(self):
-        f = None
-        for index,row in self.df.iterrows():
-            if f != index.date():
-                f = str(index.date()) 
-                images = np.load(self.data_path/f'{f}.npy',allow_pickle=False,fix_imports=False)
-            ghis,cskys = self.nowcast(index)    
-            for i,station in enumerate(self.stations):
-                ghi = ghis[:,i]
-                csky = cskys[:,i]
-                yield({'image':images[row.new_offset,i],'ghi':ghi,'csky':csky})
+                
+    def enc_timestamp(self,index): # encode timestamps
+        # 31 (1-31) - Day, 12 (1-12) - Month, 24 (0-23) - Hours, 4 (0,15,30,45) - Minutes
+        enc = np.zeros(71,dtype=np.int)
+        enc[index.day-1] = 1
+        enc[30+index.month] = 1
+        enc[43+index.hour] = 1
+        enc[67+[0,15,30,45].index(index.minute)] = 1
+        return enc
     
-    def nowcast(self,index):
+    def nowcast(self,index): 
+        """ get T,T+1,T+3,T+6 ghi and interpolate if missing"""
         col_ghi = [s+'_GHI' for s in self.stations]
-        col_csky = [s+'_CLEARSKY_GHI' for s in self.stations]
-        ghis = [self.df.loc[index,col_ghi]]
-        cskys = [self.df.loc[index,col_csky]]
-        for i in [1,3,6]: #TODO deal with negatives and nans if present in df
+        ghis = [self.df.loc[index,col_ghi]] # T_0
+        for i in [1,3,6]: #TODO replace negative values with zeros
             if index + timedelta(hours=i) in self.df.index:
                 new_index = index + timedelta(hours=i)
                 ghis.append(self.df.loc[new_index,col_ghi])
-                cskys.append(self.df.loc[new_index,col_csky])
             elif index + timedelta(hours=i-1,minutes=45) in self.df.index and index + timedelta(hours=i,minutes=15) in self.df.index:
                 g = (self.df.loc[index + timedelta(hours=i-1,minutes=45),col_ghi] + self.df.loc[index + timedelta(hours=i,minutes=15),col_ghi])/2
                 ghis.append(g)
-                c = (self.df.loc[index + timedelta(hours=i-1,minutes=45),col_csky] + self.df.loc[index + timedelta(hours=i,minutes=15),col_csky])/2
-                cskys.append(c)
             elif index + timedelta(hours=i,minutes=15) in self.df.index:
                 new_index = index + timedelta(hours=i,minutes=15)
                 ghis.append(self.df.loc[new_index,col_ghi])
-                cskys.append(self.df.loc[new_index,col_csky])
             elif index + timedelta(hours=i-1,minutes=45) in self.df.index:
                 new_index = index + timedelta(hours=i-1,minutes=45)
                 ghis.append(self.df.loc[new_index,col_ghi])
-                cskys.append(self.df.loc[new_index,col_csky])
             elif index + timedelta(hours=i,minutes=30) in self.df.index:
                 new_index = index + timedelta(hours=i,minutes=30)
                 ghis.append(self.df.loc[new_index,col_ghi])
-                cskys.append(self.df.loc[new_index,col_csky])
             elif index + timedelta(hours=i-1,minutes=30) in self.df.index:
                 new_index = index + timedelta(hours=i-1,minutes=30)
                 ghis.append(self.df.loc[new_index,col_ghi])
-                cskys.append(self.df.loc[new_index,col_csky])
-            else:
+            else: # TODO improve
                 ghis.append([0]*7)
-                cskys.append([0]*7)
-        return np.array(ghis),np.array(cskys)
+        return np.array(ghis)
+    
+    
+    def fetch_sequence(self,index,num,limit=10):
+        """Get 'num' samples sequence data """
+        i,trials = 0,0
+        tmp_index,f = index, None
+        seq_images,cskys,timestamps = [],[],[]
+        while i<num and trials <limit: # trials sets a hard limit on while excecution (in case no sample found or missing)
+            # open file
+            if f != tmp_index.date():
+                f = str(tmp_index.date()) 
+                full_day = np.load(self.data_path/f'{f}.npy',allow_pickle=False,fix_imports=False)
+            # record stuff
+            if tmp_index in self.df.index:     
+                seq_images.append(full_day[self.df.at[tmp_index,"new_offset"]])
+                cskys.append(self.df.loc[tmp_index,self.col_csky])
+                timestamps.append(self.enc_timestamp(tmp_index))
+                i += 1
+            # update index - 15 minutes
+            tmp_index = tmp_index - timedelta(minutes=15)
+            trials +=1
+
+        return np.array(seq_images),np.array(cskys),np.array(timestamps)
+            
+
+    def get_next_sample(self,num=5):
+        
+        self.col_csky = [s+'_CLEARSKY_GHI' for s in self.stations] # just to pick out clearsky values
+        for index,row in self.df.iterrows():
+
+            seq_images,cskys,timestamps = self.fetch_sequence(index,num)
+            # seq_images -> size: nums*7*size*size
+            # cskys -> nums * 7
+            # timestamps -> nums*71
+            ghis = self.nowcast(index) # size:4x7
+
+            for i,station in enumerate(self.stations):
+                ghi = ghis[:,i]
+                csky = cskys[:,i]
+                images = seq_images[:,i]
+                yield({ 'image':images,
+                        'station':np.eye(7,dtype=np.int)[i],
+                        'ghi':ghi,
+                        'csky':csky,
+                        'timestamp':timestamps})
+
                 
                 
 
@@ -106,7 +142,7 @@ def benchmark(dataset,epochs=3):
 def main(subset_size:int=300,
          epochs:int=3,
          do_cache:bool=True,
-         copy_data:bool=False): 
+         use_slurm:bool=True): 
     
     
     print('Reading dataframe...')
@@ -124,18 +160,18 @@ def main(subset_size:int=300,
     # subset
     metadata = metadata.iloc[:subset_size]
         
-#     # Copy files to compute node
-#     path = utils.copy_files(data_path='/project/cq-training-1/project1/data/', hdf5_folder='hdf5v7_8bit') if copy_data else '/project/cq-training-1/project1/data/hdf5v7_8bit'
-    
+    if use_slurm: crops.get_crops(metadata) # copy to slurm
     
     # Now try with and without caching, tremendous improvement
     if do_cache:
-        benchmark(CropDataset(metadata,image_size=20, use_slurm=True).cache(), epochs=epochs)
+        benchmark(CropDataset(metadata,image_size=20, use_slurm=use_slurm).cache(), epochs=epochs)
     else:
-        benchmark(CropDataset(metadata,image_size=20, use_slurm=True), epochs=epochs)
+        benchmark(CropDataset(metadata,image_size=20, use_slurm=use_slurm), epochs=epochs)
         
 
     
 if __name__ == "__main__":
+    import fire
+    import crops
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
     fire.Fire(main)
