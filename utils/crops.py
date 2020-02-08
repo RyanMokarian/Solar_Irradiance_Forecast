@@ -97,13 +97,12 @@ def get_crops(df:pd.DataFrame,stations:dict,size:int=20,use_slurm = True,dest=No
         print("Creating Crops")
         create_crops(df,stations,size,str(store))
         with tarfile.open(f'crops-{size}.tar','w') as tarf:
-            for f in (store/f'crops-{size}').ls():
-                tarf.add(f)
+            tarf.add(store/f'crops-{size}',f'crops-{size}')
         if dest:
             print("Copying files")
             shutil.copy(str(store/f'crops-{size}.tar'),dest)
             with tarfile.open(Path(dest)/f'crops-{size}.tar') as tarf:
-                tarf.extractall()
+                tarf.extractall(dest)
             
 
 def main(size:int=20,use_slurm=True):
