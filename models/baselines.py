@@ -29,12 +29,12 @@ class SunsetModel(tf.keras.Model):
     def call(self, inputs):
         # Conv block 1
         x = self.conv1(inputs)
-        x = self.batch_norm(x)
+        #x = self.batch_norm(x)
         x = self.maxpooling(x)
         
         # Conv block 2
         x = self.conv2(x)
-        x = self.batch_norm(x)
+        #x = self.batch_norm(x)
         x = self.maxpooling(x)
         
         # Fully connected
@@ -42,7 +42,6 @@ class SunsetModel(tf.keras.Model):
         x = self.dense1(x)
         x = self.dense2(x)
         x = self.dense3(x)
-
         return x
     
 class ConvDemModel(tf.keras.Model):
@@ -57,39 +56,24 @@ class ConvDemModel(tf.keras.Model):
         self.dense = tf.keras.layers.Dense(1, activation=None)
 
     def call(self, inputs):
-        # Note Kernels are 3x3, Maxpools are 2x2
-        # Potential hyper-parameters: image_size, dropout ...
-
-        # Reshape default input shape from (batch, channels, height, width) to (batch, height, width, channels)  
-        print('input shape',f'{inputs.shape}')
-        data = asarray(inputs)
-        data = moveaxis(data, 1, 3) # reshape from NCHW to NHWC
-        print('data shape after channel change', f'{data.shape}')
-
         # Conv block 1:        
-        x = self.conv1(data)   # 30x30x5 input convs to 30x30x32
+        x = self.conv1(inputs)   # 30x30x5 input convs to 30x30x32
         x = self.maxpooling(x)   # 30x30x32 maxpools to 15x15x32
-        print('After block 1',f'{x.shape}')
 
         # Conv block 2
         x = self.conv2(x)        # 15x15x32 convs to 15x15x32
         x = self.maxpooling(x)   # 15x15x32 maxpools to 7x7x64
-        print('After block 2',f'{x.shape}')
         
         # Conv block 3        
         x = self.conv3(x)        # 7x7x64 convs to 7x7x64
         x = self.maxpooling(x)   # 7x7x64 maxpools to 3x3x64
-        print('After block 3',f'{x.shape}')
         
         # Conv block 4        
         x = self.conv3(x)        # 3x3x64 convs to 3x3x64        
-        print('After block 4',f'{x.shape}')
 
         # Flatten, dropped out (%20) & output
         x = self.flatten(x)      
-        print('After flatten',f'{x.shape}')
         x = self.droppedout(x)
         x = self.dense(x)
-        print('After dense',f'{x.shape}')
-     
+        
         return x

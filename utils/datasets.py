@@ -37,7 +37,7 @@ class SolarIrradianceDataset(tf.data.Dataset):
                                                         'station_name': tf.TensorShape([]),
                                                         'station_lat': tf.TensorShape([]),
                                                         'station_long': tf.TensorShape([]),
-                                                        'images': tf.TensorShape([5, image_size, image_size]),
+                                                        'images': tf.TensorShape([image_size, image_size, 5]),
                                                         'csky_ghi': tf.TensorShape([]),
                                                         'ghi': tf.TensorShape([])}).prefetch(tf.data.experimental.AUTOTUNE)
 
@@ -113,7 +113,7 @@ class DataGenerator(object):
                     img = (img - mean)/std # Normalize image
                     cropped_images.append(img[pixel_coords[0]-pixels:pixel_coords[0]+pixels+adjustement,
                                           pixel_coords[1]-pixels:pixel_coords[1]+pixels+adjustement])
-                cropped_images = tf.convert_to_tensor(np.array(cropped_images))
+                cropped_images = tf.convert_to_tensor(np.moveaxis(np.array(cropped_images), 0, -1))
                     
                 yield ({'hdf5_8bit_path': hdf5_8bit_path, 
                         'hdf5_8bit_offset': hdf5_8bit_offset,
