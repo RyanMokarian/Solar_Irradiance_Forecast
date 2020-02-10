@@ -59,6 +59,12 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          saved_model_dir: str = None
         ):
     
+    # Warning if no GPU detected
+    if len(tf.config.list_physical_devices('GPU')) == 0:
+        print('WARNING : No GPU detected, training will run on CPU.')
+    elif len(tf.config.list_physical_devices('GPU')) > 1:
+        print('WARNING : Multiple GPUs detected, training will run on only one GPU.')
+    
     # Copy data to the compute node
     tmp_data_path = utils.copy_files(DATA_PATH, HDF5_8BIT) if copy_data else None
 
