@@ -80,7 +80,7 @@ def get_crops(df:pd.DataFrame,stations:dict=stations,size:int=20,use_slurm = Tru
         else: 
             print(f"Deleting: {tmp.name}")
             shutil.rmtree(str(tmp))
-        
+            
     f_list = [o.name for o in store.ls()]
     if f'crops-{size}.tar' in f_list:  # If tar exists
         if dest:
@@ -89,10 +89,14 @@ def get_crops(df:pd.DataFrame,stations:dict=stations,size:int=20,use_slurm = Tru
             print("Extracting")
             with tarfile.open(Path(dest)/f'crops-{size}.tar') as tarf:
                 tarf.extractall(dest)
+        else: 
+            print(f"Data present at {store}")
     elif f'crops-{size}' in f_list: # Just copy the folder
         if dest:
             print("Copying Folder")
             utils.copy_files(str(store),f'crops-{size}')
+        else: 
+            print(f"Data present at {store}")
     else:     # Create the crops,tar,copy,
         print("Creating Crops")
         create_crops(df,stations,size,str(store))
