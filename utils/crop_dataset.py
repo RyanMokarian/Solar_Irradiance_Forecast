@@ -17,9 +17,10 @@ Path.ls = lambda x:list(x.iterdir())
 
 class CropDataset(tf.data.Dataset):
     
-    def __new__(cls,df:pd.DataFrame,image_size:int,use_slurm = True):
+    def __new__(cls,df:pd.DataFrame,image_size:int,num_seq = 5,use_slurm = True):
         
         return tf.data.Dataset.from_generator(CropGen(df,image_size,use_slurm).get_next_sample,
+                                         args = [num_seq],
                                          output_types={ 'image':tf.float32,
                                                         'station':tf.int32,
                                                         'ghi':tf.float32,
@@ -141,6 +142,7 @@ def benchmark(dataset,epochs=3):
     
 def main(subset_size:int=300,
          epochs:int=3,
+         num_seq:int=6,
          do_cache:bool=True,
          use_slurm:bool=True): 
     
@@ -164,9 +166,9 @@ def main(subset_size:int=300,
     
     # Now try with and without caching, tremendous improvement
     if do_cache:
-        benchmark(CropDataset(metadata,image_size=20, use_slurm=use_slurm).cache(), epochs=epochs)
+        benchmark(CropDataset(metadata,image_size=20,num_seq=num_seq,use_slurm=use_slurm).cache(), epochs=epochs)
     else:
-        benchmark(CropDataset(metadata,image_size=20, use_slurm=use_slurm), epochs=epochs)
+        benchmark(CropDataset(metadata,image_size=20,num_seq=num_seq,use_slurm=use_slurm), epochs=epochs)
         
 
     
