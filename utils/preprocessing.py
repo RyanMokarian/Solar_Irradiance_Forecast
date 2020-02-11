@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import pickle
 import random
-from utils import crops 
 
 def preprocess(df: pd.DataFrame, shuffle: bool = True):
     """Apply preprocessing steps on the pandas dataframe.
