@@ -11,14 +11,15 @@ import utils
 from pathlib import Path
 Path.ls = lambda x:list(x.iterdir())
 
+def add_new_offset(df: pd.DataFrame, data_path: str, crop_folder: str):
+    """
+    Adds new offset to the dataframe to deal with saved npy pre-cropped data.
+    """
+    new_offset= np.load(os.path.join(data_path, f'{crop_folder}/new_index.npy'))
+    df = df.assign(new_offset=new_offset)    
+    return df
 
-
-stations = {'BND':(40.05192,-88.37309), 'TBL':(40.12498,-105.2368),
-                         'DRA':(36.62373,-116.01947), 'FPK':(48.30783,-105.1017),
-                         'GWN':(34.2547,-89.8729), 'PSU':(40.72012,-77.93085), 
-                         'SXF':(43.73403,-96.62328)}
-
-def create_crops(df,stations = stations ,size = 20,dest='.'):
+def create_crops(df, stations, size, dest):
     """Function to create crops and save as .npy"""
     # store in new_dir 'crops-size'
     dest = Path(dest+'/crops-'+str(size))
@@ -60,54 +61,55 @@ def create_crops(df,stations = stations ,size = 20,dest='.'):
     if missing_data: print(f"These rows are missing: {missing_data}")
     return missing_data
 
-
-
-
-def get_crops(df:pd.DataFrame,stations:dict=stations,size:int=20,use_slurm = True,dest=None):
+def get_crops(df:pd.DataFrame, stations:dict, image_size:int, dest=None):
     
     """ Checks for data at /project/cq-training-1/project1/teams/team12/
-    creates and tars if missing.
-    optionally copies to SLURM  or dest 
-    """
+    creates and tars if missing. Optionally copies to dest.
     
-    dest = os.environ["SLURM_TMPDIR"] if use_slurm else dest
-    tmp = Path(str(dest))/f'crops-{size}'
+    Returns:
+        pd.DataFrame -- dataframe with new offset indexes column for npy data
+    """
+    crop_folder = f'crops-{image_size}'
+    tmp = Path(str(dest))/crop_folder
     store = Path('/project/cq-training-1/project1/teams/team12/')
     if tmp.exists(): 
-        if len(tmp.ls()) == len((store/f'crops-{size}').ls()):
+        if len(tmp.ls()) == len((store/crop_folder).ls()):
             print("Data present in destination")
-            return
+            return add_new_offset(df, store, crop_folder)
         else: 
             print(f"Deleting: {tmp.name}")
             shutil.rmtree(str(tmp))
             
     f_list = [o.name for o in store.ls()]
-    if f'crops-{size}.tar' in f_list:  # If tar exists
+    if f'{crop_folder}.tar' in f_list:  # If tar exists
         if dest:
             print("Copying Tar")
-            shutil.copy(str(store/f'crops-{size}.tar'),dest)
+            shutil.copy(str(store/f'{crop_folder}.tar'),dest)
             print("Extracting")
-            with tarfile.open(Path(dest)/f'crops-{size}.tar') as tarf:
+            with tarfile.open(Path(dest)/f'{crop_folder}.tar') as tarf:
                 tarf.extractall(dest)
         else: 
             print(f"Data present at {store}")
-    elif f'crops-{size}' in f_list: # Just copy the folder
+    elif crop_folder in f_list: # Just copy the folder
         if dest:
             print("Copying Folder")
-            utils.copy_files(str(store),f'crops-{size}')
+            utils.copy_files(str(store),crop_folder)
         else: 
             print(f"Data present at {store}")
     else:     # Create the crops,tar,copy,
         print("Creating Crops")
         create_crops(df,stations,size,str(store))
-        with tarfile.open(f'crops-{size}.tar','w') as tarf:
-            tarf.add(store/f'crops-{size}',f'crops-{size}')
+        with tarfile.open(f'{crop_folder}.tar','w') as tarf:
+            tarf.add(store/crop_folder,crop_folder)
         if dest:
             print("Copying files")
-            shutil.copy(str(store/f'crops-{size}.tar'),dest)
-            with tarfile.open(Path(dest)/f'crops-{size}.tar') as tarf:
+            shutil.copy(str(store/f'{crop_folder}.tar'),dest)
+            with tarfile.open(Path(dest)/f'{crop_folder}.tar') as tarf:
                 tarf.extractall(dest)
-            
+
+    df = add_new_offset(df, store, crop_folder)
+    return df
+
 
 def main(size:int=20,use_slurm=True):
     
@@ -116,8 +118,6 @@ def main(size:int=20,use_slurm=True):
     metadata = metadata.replace('nan',np.NaN)
     metadata = metadata[metadata.ncdf_path.notna()]
     get_crops(metadata,stations,size,use_slurm)
-    
-    
     
 if __name__ == "__main__":
     import fire
