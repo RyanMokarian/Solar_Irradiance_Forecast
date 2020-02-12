@@ -127,7 +127,7 @@ class CropGen():
                 tmp_index = tmp_index - timedelta(minutes=15)
             timestamps.append(self.enc_timestamp(tmp_index))
 
-        return np.array(seq_images), np.array(cskys), np.array(timestamps)
+        return seq_images, cskys, np.array(timestamps)
             
     def get_next_sample(self,num=5):
         
