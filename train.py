@@ -3,10 +3,12 @@ import fire
 import datetime
 import pandas as pd
 from models import baselines
-from utils.datasets import SolarIrradianceDataset
+from dataset.datasets import SolarIrradianceDataset
+from dataset.crop_dataset import CropDataset
 from utils import preprocessing
 from utils import utils
 from utils import plots
+from utils import crops
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
 import tensorflow as tf
@@ -14,6 +16,7 @@ import tensorflow as tf
 DATA_PATH = '/project/cq-training-1/project1/data/'
 HDF5_8BIT = 'hdf5v7_8bit'
 VALID_PERC = 0.2
+SLURM_TMPDIR = os.environ["SLURM_TMPDIR"]
 
 # Setup writers for tensorboard
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -21,6 +24,12 @@ train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
 test_log_dir = 'logs/gradient_tape/' + current_time + '/valid'
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+
+# TODO : Probably move this in a data.py file in a data class (data.stations)
+stations = {'BND':(40.05192,-88.37309), 'TBL':(40.12498,-105.2368),
+            'DRA':(36.62373,-116.01947), 'FPK':(48.30783,-105.1017),
+            'GWN':(34.2547,-89.8729), 'PSU':(40.72012,-77.93085), 
+            'SXF':(43.73403,-96.62328)}
 
 #@tf.function
 def train_epoch(model, data_loader, batch_size, loss_function, optimizer):
@@ -55,8 +64,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          lr: float = 1e-4 , 
          batch_size: int = 100,
          subset_perc: float = 1,
-         copy_data: bool = False,
-         saved_model_dir: str = None
+         saved_model_dir: str = None,
+         seq_len: int = 5
         ):
     
     # Warning if no GPU detected
@@ -64,14 +73,14 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         print('WARNING : No GPU detected, training will run on CPU.')
     elif len(tf.config.list_physical_devices('GPU')) > 1:
         print('WARNING : Multiple GPUs detected, training will run on only one GPU.')
-    
-    # Copy data to the compute node
-    tmp_data_path = utils.copy_files(DATA_PATH, HDF5_8BIT) if copy_data else None
 
     # Load dataframe
     print('Loading and preprocessing dataframe...')
     df = pd.read_pickle(df_path)
-    df = preprocessing.preprocess(df)
+    df = preprocessing.preprocess(df, shuffle=False)
+
+    # Pre-crop data & add new offsets column to dataframe
+    df = crops.get_crops(df,stations,image_size,dest=SLURM_TMPDIR)
     
     # Split into train and valid
     df = df.iloc[:int(len(df.index)*subset_perc)]
@@ -85,6 +94,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         model = baselines.SunsetModel()
     elif model == 'cnndem':
         model = baselines.ConvDemModel(image_size)
+    elif model == 'sunset3d':
+        model = baselines.Sunset3DModel(seq_len)
     else:
         raise Exception(f'Model \"{model}\" not recognized.')
         
@@ -101,9 +112,14 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     else:
         raise Exception(f'Optimizer \"{optimizer}\" not recognized.')
     
-    # Create data loader
-    dataloader_train = SolarIrradianceDataset(df_train, image_size, tmp_data_path)
-    dataloader_valid = SolarIrradianceDataset(df_valid, image_size, tmp_data_path)
+    print(model.__class__.__name__)
+    if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
+        # Create data loader
+        dataloader_train = CropDataset(df_train, image_size, num_seq=seq_len, data_dir=SLURM_TMPDIR)
+        dataloader_valid = CropDataset(df_valid, image_size, num_seq=seq_len, data_dir=SLURM_TMPDIR)
+    else:
+        dataloader_train = SolarIrradianceDataset(df_train, image_size)
+        dataloader_valid = SolarIrradianceDataset(df_valid, image_size)
     
     # Training loop
     print('Training...')

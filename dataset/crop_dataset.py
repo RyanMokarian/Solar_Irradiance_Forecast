@@ -14,38 +14,38 @@ from datetime import timedelta
 from pathlib import Path
 Path.ls = lambda x:list(x.iterdir())
 
-
 class CropDataset(tf.data.Dataset):
     
-    def __new__(cls,df:pd.DataFrame,image_size:int,num_seq = 5,use_slurm = True):
+    def __new__(cls,df: pd.DataFrame, image_size: int, data_dir: str, num_seq: int = 5, flexible_seq: bool = False):
+        if flexible_seq == True:
+            raise Exception(f'Flexible sequences not completely implemented yet.')
         
-        return tf.data.Dataset.from_generator(CropGen(df,image_size,use_slurm).get_next_sample,
+        return tf.data.Dataset.from_generator(CropGen(df, image_size, data_dir, flexible_seq).get_next_sample,
                                          args = [num_seq],
-                                         output_types={ 'image':tf.float32,
+                                         output_types={ 'images':tf.float32,
                                                         'station':tf.int32,
                                                         'ghi':tf.float32,
                                                         'csky':tf.float32,
                                                         'timestamp':tf.int32},
-                                         output_shapes ={'image':tf.TensorShape([None,5,image_size,image_size]),
+                                         output_shapes ={'images':tf.TensorShape([None,5,image_size,image_size]),
                                                          'station':tf.TensorShape([7]),
                                                          'ghi':tf.TensorShape([4]),
                                                          'csky':tf.TensorShape([None]),
                                                          'timestamp':tf.TensorShape([None,71]),
                                                         }).prefetch(tf.data.experimental.AUTOTUNE)
 
-
 class CropGen():
     
     #  TODO flexible crop sizes using 50x50 image as the base + 
     
-    def __init__(self,df:pd.DataFrame,image_size:int,use_slurm=True):
-        self.data_path = os.environ["SLURM_TMPDIR"] if use_slurm else '/project/cq-training-1/project1/teams/team12/'
-        self.data_path = Path(self.data_path)/f'crops-{image_size}'
+    def __init__(self,df: pd.DataFrame, image_size: int, data_dir: str, flexible_seq: bool = False):
         self.df = df
+        self.image_size = image_size
+        self.data_path = Path(data_dir)/f'crops-{image_size}'
+        self.flexible_seq = flexible_seq
         self.stations = ['BND','TBL','DRA','FPK','GWN', 'PSU','SXF']
         
-                
-    def enc_timestamp(self,index): # encode timestamps
+    def enc_timestamp(self, index): # encode timestamps
         # 31 (1-31) - Day, 12 (1-12) - Month, 24 (0-23) - Hours, 4 (0,15,30,45) - Minutes
         enc = np.zeros(71,dtype=np.int)
         enc[index.day-1] = 1
@@ -54,7 +54,7 @@ class CropGen():
         enc[67+[0,15,30,45].index(index.minute)] = 1
         return enc
     
-    def nowcast(self,index): 
+    def nowcast(self, index): 
         """ get T,T+1,T+3,T+6 ghi and interpolate if missing"""
         col_ghi = [s+'_GHI' for s in self.stations]
         ghis = [self.df.loc[index,col_ghi]] # T_0
@@ -81,9 +81,13 @@ class CropGen():
                 ghis.append([0]*7)
         return np.array(ghis)
     
-    
-    def fetch_sequence(self,index,num,limit=10):
-        """Get 'num' samples sequence data """
+    def fetch_flexible_sequence(self,index,num,limit=10):
+        """
+        Get 'num' samples sequence data, with a variable timestep depending on data availability.
+
+        Returns:
+            (np.array, np.array, np.array) -- Images, csky ghis, timesteps
+        """
         i,trials = 0,0
         tmp_index,f = index, None
         seq_images,cskys,timestamps = [],[],[]
@@ -103,14 +107,37 @@ class CropGen():
             trials +=1
 
         return np.array(seq_images),np.array(cskys),np.array(timestamps)
-            
 
+    def fetch_hard_sequence(self,index,num,limit=10):
+        """
+        Get 'num' samples sequence data, with image interpolation (Not implemented yet) depending on data availability.
+
+        Returns:
+            (np.array, np.array, np.array) -- Images, csky ghis, timestamps
+        """
+        tmp_index, f = index, None
+        seq_images, cskys, timestamps = np.zeros((num, 7, 5, self.image_size, self.image_size)), np.zeros((num, 7)), []
+        for i in range(len(seq_images)):
+            if f != tmp_index.date():
+                f = str(tmp_index.date()) 
+                full_day = np.load(self.data_path/f'{f}.npy',allow_pickle=False,fix_imports=False)
+            if tmp_index in self.df.index: 
+                seq_images[i] = full_day[self.df.at[tmp_index,"new_offset"]]
+                cskys[i] = self.df.loc[tmp_index,self.col_csky] # TODO : We dropped columns that we shouldn't have maybe ? 
+                tmp_index = tmp_index - timedelta(minutes=15)
+            timestamps.append(self.enc_timestamp(tmp_index))
+
+        return seq_images, cskys, np.array(timestamps)
+            
     def get_next_sample(self,num=5):
         
         self.col_csky = [s+'_CLEARSKY_GHI' for s in self.stations] # just to pick out clearsky values
         for index,row in self.df.iterrows():
 
-            seq_images,cskys,timestamps = self.fetch_sequence(index,num)
+            if self.flexible_seq:
+                seq_images, cskys, timestamps = self.fetch_sequence(index, num)
+            else:
+                seq_images, cskys, timestamps = self.fetch_hard_sequence(index, num)
             # seq_images -> size: nums*7*size*size
             # cskys -> nums * 7
             # timestamps -> nums*71
@@ -120,14 +147,11 @@ class CropGen():
                 ghi = ghis[:,i]
                 csky = cskys[:,i]
                 images = seq_images[:,i]
-                yield({ 'image':images,
+                yield({ 'images':images,
                         'station':np.eye(7,dtype=np.int)[i],
                         'ghi':ghi,
                         'csky':csky,
                         'timestamp':timestamps})
-
-                
-                
 
 def benchmark(dataset,epochs=3):
     start_time = time.perf_counter()
@@ -138,14 +162,11 @@ def benchmark(dataset,epochs=3):
     total_time = time.perf_counter() - start_time
     print("Execution time:", total_time)
 
-    
-    
 def main(subset_size:int=300,
          epochs:int=3,
          num_seq:int=6,
          do_cache:bool=True,
          use_slurm:bool=True): 
-    
     
     print('Reading dataframe...')
     metadata = pd.read_pickle('/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl')
@@ -154,10 +175,6 @@ def main(subset_size:int=300,
     metadata = metadata[metadata.ncdf_path.notna()]
     new_offset= np.load(Path('/project/cq-training-1/project1/teams/team12/crops-20/new_index.npy'))
     metadata = metadata.assign( new_offset = new_offset)
-    
-    
-    
-    
     
     # subset
     metadata = metadata.iloc[:subset_size]
@@ -169,8 +186,6 @@ def main(subset_size:int=300,
         benchmark(CropDataset(metadata,image_size=20,num_seq=num_seq,use_slurm=use_slurm).cache(), epochs=epochs)
     else:
         benchmark(CropDataset(metadata,image_size=20,num_seq=num_seq,use_slurm=use_slurm), epochs=epochs)
-        
-
     
 if __name__ == "__main__":
     import fire

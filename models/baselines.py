@@ -43,6 +43,15 @@ class SunsetModel(tf.keras.Model):
         x = self.dense2(x)
         x = self.dense3(x)
         return x
+
+class Sunset3DModel(tf.keras.Model):
+    def __init__(self, seq_len):
+        super(Sunset3DModel, self).__init__()
+        
+        # TODO : Sunset model but with 3D convolution
+
+    def call(self, inputs):
+        return None
     
 class ConvDemModel(tf.keras.Model):
     def __init__(self, image_size):
