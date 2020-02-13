@@ -27,7 +27,7 @@ class CropDataset(tf.data.Dataset):
                                                         'ghi':tf.float32,
                                                         'csky':tf.float32,
                                                         'timestamp':tf.int32},
-                                         output_shapes ={'images':tf.TensorShape([None,5,image_size,image_size]),
+                                         output_shapes ={'images':tf.TensorShape([num_seq,image_size,image_size,5]),
                                                          'station':tf.TensorShape([7]),
                                                          'ghi':tf.TensorShape([4]),
                                                          'csky':tf.TensorShape([None]),
@@ -126,6 +126,8 @@ class CropGen():
                 cskys[i] = self.df.loc[tmp_index,self.col_csky] # TODO : We dropped columns that we shouldn't have maybe ? 
                 tmp_index = tmp_index - timedelta(minutes=15)
             timestamps.append(self.enc_timestamp(tmp_index))
+        
+        seq_images = np.moveaxis(seq_images, 2, -1) # Move channels last
 
         return seq_images, cskys, np.array(timestamps)
             

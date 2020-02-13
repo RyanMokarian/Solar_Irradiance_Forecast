@@ -36,6 +36,7 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer):
     total_loss, nb_batch = 0, 0
     for batch in data_loader.batch(batch_size):
         images, labels = batch['images'], batch['ghi']
+        print('images shape : ', images.shape)
         with tf.GradientTape() as tape:
             preds = model(images)
             loss = loss_function(y_true=labels, y_pred=preds)
@@ -43,6 +44,7 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer):
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
         total_loss += loss
         nb_batch += 1
+        print('One batch done :O')
     return total_loss/nb_batch # Average total epoch loss
 
 #@tf.function
@@ -112,7 +114,6 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     else:
         raise Exception(f'Optimizer \"{optimizer}\" not recognized.')
     
-    print(model.__class__.__name__)
     if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
         # Create data loader
         dataloader_train = CropDataset(df_train, image_size, num_seq=seq_len, data_dir=SLURM_TMPDIR)
