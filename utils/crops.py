@@ -111,13 +111,13 @@ def get_crops(df:pd.DataFrame, stations:dict, image_size:int, dest=None):
     return df
 
 
-def main(size:int=20,use_slurm=True):
+def main(size:int=20,stations=None):
     
     print('Reading dataframe...')
     metadata = pd.read_pickle('/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl')
     metadata = metadata.replace('nan',np.NaN)
     metadata = metadata[metadata.ncdf_path.notna()]
-    get_crops(metadata,stations,size,use_slurm)
+    get_crops(metadata,stations,size,os.environ["SLURM_TMPDIR"])
     
 if __name__ == "__main__":
     import fire

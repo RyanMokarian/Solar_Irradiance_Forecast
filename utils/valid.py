@@ -4,7 +4,8 @@ import pandas as pd
 
 def train_valid_df(df:pd.DataFrame,dates:list=[201301,201406,201208,201103,201010]):
     """A Year has approx 35000 rows and a month has approx 3000 rows.
-       Default fetches roughly 14500 rows """
+       Default fetches roughly 14500 rows 
+       Return a train and valid df"""
     valid_idx = []
     for ele in dates:
         ele = str(ele)
