@@ -112,7 +112,6 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     else:
         raise Exception(f'Optimizer \"{optimizer}\" not recognized.')
     
-    print(model.__class__.__name__)
     if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
         # Create data loader
         dataloader_train = CropDataset(df_train, image_size, num_seq=seq_len, data_dir=SLURM_TMPDIR)
