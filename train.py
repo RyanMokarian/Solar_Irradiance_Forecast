@@ -36,7 +36,6 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer):
     total_loss, nb_batch = 0, 0
     for batch in data_loader.batch(batch_size):
         images, labels = batch['images'], batch['ghi']
-        print('images shape : ', images.shape)
         with tf.GradientTape() as tape:
             preds = model(images)
             loss = loss_function(y_true=labels, y_pred=preds)
@@ -44,7 +43,6 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer):
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
         total_loss += loss
         nb_batch += 1
-        print('One batch done :O')
     return total_loss/nb_batch # Average total epoch loss
 
 #@tf.function

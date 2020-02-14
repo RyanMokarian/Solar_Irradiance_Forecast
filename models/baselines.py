@@ -52,7 +52,8 @@ class Sunset3DModel(tf.keras.Model):
         self.maxpooling = tf.keras.layers.MaxPool3D(pool_size=(2, 2, 2))
         self.flatten = tf.keras.layers.Flatten()
         self.dense1 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
-        self.dense2 = tf.keras.layers.Dense(1, activation=None)
+        self.dense2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(4, activation=None)
 
     def call(self, inputs):
          # Conv block 1
@@ -68,8 +69,8 @@ class Sunset3DModel(tf.keras.Model):
         # Fully connected
         x = self.flatten(x)
         x = self.dense1(x)
-        x = self.dense1(x)
         x = self.dense2(x)
+        x = self.dense3(x)
         return x
     
 class ConvDemModel(tf.keras.Model):
