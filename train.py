@@ -50,10 +50,10 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer):
         nb_batch += 1
         
         # Tensorboard logging
-        if i % BATCH_LOG_INTERVAL == 0: 
+        if nb_batch % BATCH_LOG_INTERVAL == 0: 
             with train_summary_writer.as_default():
                 tf.summary.scalar('batch_loss_train', loss.numpy(), step=nb_batch)
-                tf.summary.image("Training data", np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch)
+                tf.summary.image(f"GHIs : {labels[0].numpy()}", np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch, max_outputs=5)
 
     return total_loss/nb_batch # Average total epoch loss
 
