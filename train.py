@@ -1,8 +1,10 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # Disable tensorflow debugging logs
+import glob
 import fire
 import datetime
 import pandas as pd
+import numpy as np
 import tensorflow as tf
 from models import baselines
 from dataset.datasets import SolarIrradianceDataset
@@ -15,8 +17,9 @@ from utils import logging
 
 DATA_PATH = '/project/cq-training-1/project1/data/'
 HDF5_8BIT = 'hdf5v7_8bit'
+BATCH_LOG_INTERVAL = 50
 VALID_PERC = 0.2
-SLURM_TMPDIR = os.environ["SLURM_TMPDIR"] if "SLURM_TMPDIR" in os.environ else None
+SLURM_TMPDIR = os.environ["SLURM_TMPDIR"] if "SLURM_TMPDIR" in os.environ else glob.glob('/localscratch/'+os.environ['USER']+'*')[0]
 
 # Setup writers for tensorboard
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -45,6 +48,13 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer):
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
         total_loss += loss
         nb_batch += 1
+        
+        # Tensorboard logging
+        if i % BATCH_LOG_INTERVAL == 0: 
+            with train_summary_writer.as_default():
+                tf.summary.scalar('batch_loss_train', loss.numpy(), step=nb_batch)
+                tf.summary.image("Training data", np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch)
+
     return total_loss/nb_batch # Average total epoch loss
 
 #@tf.function
