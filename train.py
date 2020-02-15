@@ -1,7 +1,9 @@
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # Disable tensorflow debugging logs
 import fire
 import datetime
 import pandas as pd
+import tensorflow as tf
 from models import baselines
 from dataset.datasets import SolarIrradianceDataset
 from dataset.crop_dataset import CropDataset
@@ -9,14 +11,12 @@ from utils import preprocessing
 from utils import utils
 from utils import plots
 from utils import crops
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
-import tensorflow as tf
+from utils import logging
 
 DATA_PATH = '/project/cq-training-1/project1/data/'
 HDF5_8BIT = 'hdf5v7_8bit'
 VALID_PERC = 0.2
-SLURM_TMPDIR = os.environ["SLURM_TMPDIR"]
+SLURM_TMPDIR = os.environ["SLURM_TMPDIR"] if "SLURM_TMPDIR" in os.environ else None
 
 # Setup writers for tensorboard
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -24,6 +24,8 @@ train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
 test_log_dir = 'logs/gradient_tape/' + current_time + '/valid'
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+
+logger = logging.get_logger()
 
 # TODO : Probably move this in a data.py file in a data class (data.stations)
 stations = {'BND':(40.05192,-88.37309), 'TBL':(40.12498,-105.2368),
@@ -70,16 +72,17 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     
     # Warning if no GPU detected
     if len(tf.config.list_physical_devices('GPU')) == 0:
-        print('WARNING : No GPU detected, training will run on CPU.')
+        logger.warning('No GPU detected, training will run on CPU.')
     elif len(tf.config.list_physical_devices('GPU')) > 1:
-        print('WARNING : Multiple GPUs detected, training will run on only one GPU.')
+        logger.warning('Multiple GPUs detected, training will run on only one GPU.')
 
     # Load dataframe
-    print('Loading and preprocessing dataframe...')
+    logger.info('Loading and preprocessing dataframe...')
     df = pd.read_pickle(df_path)
     df = preprocessing.preprocess(df, shuffle=False)
 
-    # Pre-crop data & add new offsets column to dataframe
+    # Get pre-cropped data
+    logger.info('Getting crops...')
     df = crops.get_crops(df,stations,image_size,dest=SLURM_TMPDIR)
     
     # Split into train and valid
@@ -121,7 +124,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         dataloader_valid = SolarIrradianceDataset(df_valid, image_size)
     
     # Training loop
-    print('Training...')
+    logger.info('Training...')
     losses = {'train' : [], 'valid' : []}
     best_valid_loss = float('inf')
     for epoch in range(epochs):
@@ -132,7 +135,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
             utils.save_model(model)
         
         # Logs
-        print(f'Epoch {epoch} - Train Loss : {train_loss:.4f}, Valid Loss : {valid_loss:.4f}')
+        logger.info(f'Epoch {epoch} - Train Loss : {train_loss:.4f}, Valid Loss : {valid_loss:.4f}')
         losses['train'].append(train_loss.numpy())
         losses['valid'].append(valid_loss.numpy())
         with train_summary_writer.as_default():

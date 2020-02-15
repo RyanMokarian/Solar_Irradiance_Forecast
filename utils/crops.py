@@ -7,9 +7,12 @@ import os
 import shutil
 import tarfile
 import utils
+import logging
 
 from pathlib import Path
 Path.ls = lambda x:list(x.iterdir())
+
+logger = logging.getLogger('logger')
 
 def add_new_offset(df: pd.DataFrame, data_path: str, crop_folder: str):
     """
@@ -58,7 +61,7 @@ def create_crops(df, stations, size, dest):
         new_idx = new_idx+list(range(len(curr_day))) # append new index mapping
         np.save(dest/f_name,np.array(curr_day),allow_pickle=False,fix_imports=False) 
     np.save(dest/'new_index',np.array(new_idx),allow_pickle=False,fix_imports=False) # save the new-index
-    if missing_data: print(f"These rows are missing: {missing_data}")
+    if missing_data: logger.info(f"These rows are missing: {missing_data}")
     return missing_data
 
 def get_crops(df:pd.DataFrame, stations:dict, image_size:int, dest=None):
@@ -74,35 +77,35 @@ def get_crops(df:pd.DataFrame, stations:dict, image_size:int, dest=None):
     store = Path('/project/cq-training-1/project1/teams/team12/')
     if tmp.exists(): 
         if len(tmp.ls()) == len((store/crop_folder).ls()):
-            print("Data present in destination")
+            logger.info("Data present in destination")
             return add_new_offset(df, store, crop_folder)
         else: 
-            print(f"Deleting: {tmp.name}")
+            logger.info(f"Deleting: {tmp.name}")
             shutil.rmtree(str(tmp))
             
     f_list = [o.name for o in store.ls()]
     if f'{crop_folder}.tar' in f_list:  # If tar exists
         if dest:
-            print("Copying Tar")
+            logger.info("Copying Tar")
             shutil.copy(str(store/f'{crop_folder}.tar'),dest)
-            print("Extracting")
+            logger.info("Extracting")
             with tarfile.open(Path(dest)/f'{crop_folder}.tar') as tarf:
                 tarf.extractall(dest)
         else: 
-            print(f"Data present at {store}")
+            logger.info(f"Data present at {store}")
     elif crop_folder in f_list: # Just copy the folder
         if dest:
-            print("Copying Folder")
+            logger.info("Copying Folder")
             utils.copy_files(str(store),crop_folder)
         else: 
-            print(f"Data present at {store}")
+            logger.info(f"Data present at {store}")
     else:     # Create the crops,tar,copy,
-        print("Creating Crops")
+        logger.info("Creating Crops")
         create_crops(df,stations,size,str(store))
         with tarfile.open(f'{crop_folder}.tar','w') as tarf:
             tarf.add(store/crop_folder,crop_folder)
         if dest:
-            print("Copying files")
+            logger.info("Copying files")
             shutil.copy(str(store/f'{crop_folder}.tar'),dest)
             with tarfile.open(Path(dest)/f'{crop_folder}.tar') as tarf:
                 tarf.extractall(dest)
@@ -113,7 +116,7 @@ def get_crops(df:pd.DataFrame, stations:dict, image_size:int, dest=None):
 
 def main(size:int=20,use_slurm=True):
     
-    print('Reading dataframe...')
+    logger.info('Reading dataframe...')
     metadata = pd.read_pickle('/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl')
     metadata = metadata.replace('nan',np.NaN)
     metadata = metadata[metadata.ncdf_path.notna()]
