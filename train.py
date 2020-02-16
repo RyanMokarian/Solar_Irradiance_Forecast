@@ -9,11 +9,12 @@ import tensorflow as tf
 from models import baselines
 from dataset.datasets import SolarIrradianceDataset
 from dataset.crop_dataset import CropDataset
+from dataset.sequence_dataset import SequenceDataset
 from utils import preprocessing
 from utils import utils
 from utils import plots
-from utils import crops
 from utils import logging
+from utils import data
 
 DATA_PATH = '/project/cq-training-1/project1/data/'
 HDF5_8BIT = 'hdf5v7_8bit'
@@ -77,7 +78,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          batch_size: int = 100,
          subset_perc: float = 1,
          saved_model_dir: str = None,
-         seq_len: int = 5
+         seq_len: int = 6
         ):
     
     # Warning if no GPU detected
@@ -91,14 +92,19 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     df = pd.read_pickle(df_path)
     df = preprocessing.preprocess(df, shuffle=False)
 
-    # Get pre-cropped data
-    logger.info('Getting crops...')
-    df = crops.get_crops(df,stations,image_size,dest=SLURM_TMPDIR)
-    
     # Split into train and valid
     df = df.iloc[:int(len(df.index)*subset_perc)]
     cutoff = int(len(df.index)*(1-VALID_PERC))
     df_train, df_valid = df.iloc[:cutoff], df.iloc[cutoff:]
+
+    # Wrap dataframe
+    ghis = data.GHIs(df)
+    image_paths, image_paths_train, image_paths_valid = data.ImagePaths(df), data.ImagePaths(df_train), data.ImagePaths(df_valid)
+
+    # Pre-crop data
+    logger.info('Getting crops...')
+    images = data.Images(image_paths, image_size)
+    images.crop(dest=SLURM_TMPDIR)
     
     # Create model
     if model == 'dummy':
@@ -127,8 +133,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     
     if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
         # Create data loader
-        dataloader_train = CropDataset(df_train, image_size, num_seq=seq_len, data_dir=SLURM_TMPDIR)
-        dataloader_valid = CropDataset(df_valid, image_size, num_seq=seq_len, data_dir=SLURM_TMPDIR)
+        dataloader_train = SequenceDataset(image_paths_train, images, ghis, seq_len=seq_len)
+        dataloader_valid = SequenceDataset(image_paths_valid, images, ghis, seq_len=seq_len)
     else:
         dataloader_train = SolarIrradianceDataset(df_train, image_size)
         dataloader_valid = SolarIrradianceDataset(df_valid, image_size)

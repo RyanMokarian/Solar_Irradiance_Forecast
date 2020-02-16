@@ -13,10 +13,7 @@ def preprocess(df: pd.DataFrame, shuffle: bool = True):
     Returns:
         pd.DataFrame -- Preprocessed dataframe
     """
-    # Drops rows where file information is unavailable
     df = df.replace('nan',np.NaN)
-    df = df[df.ncdf_path.notna()] # TODO : Check the difference with 'df = df.dropna()'
-    
     df = normalize_ghi(df)
     if shuffle:
         df = shuffle_df(df)
