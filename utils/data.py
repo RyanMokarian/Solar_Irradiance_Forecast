@@ -1,15 +1,20 @@
 import datetime
 import os
 import numpy as np
+import pandas as pd
 import logging
 import pickle
 import shutil
 import tarfile
 import h5py
 from utils import utils
+from tqdm import tqdm
+from multiprocessing import Pool
 from pathlib import Path
 Path.ls = lambda x:list(x.iterdir())
 logger = logging.getLogger('logger')
+
+CROP_PROCESSES_NB = 4
 
 stations = {'BND':(40.05192,-88.37309), 'TBL':(40.12498,-105.2368),
             'DRA':(36.62373,-116.01947), 'FPK':(48.30783,-105.1017),
@@ -23,6 +28,9 @@ images_std = {'ch1': 0.30688239459685107, 'ch2': 60.6773046722939,
                     'ch6': 54.37427451580163}
 
 class GHIs(object):
+    """
+    Class that wraps the metadata dataframe to provide an interface on the GHIs values.
+    """
     def __init__(self, df):
         self.df = df.replace('nan',np.NaN)
         self.col_csky = [s+'_CLEARSKY_GHI' for s in stations.keys()]
@@ -104,6 +112,31 @@ class ImagePaths(object):
     def get_timestamps(self):
         return self.df.index
 
+    def get_paths(self):
+        paths = []
+        for timestamp, row in self.df[['ncdf_path', self.col, self.offset]].dropna().iterrows():
+            paths.append((timestamp, row[self.col], row[self.offset]))
+        return paths
+
+    def get_paths_subsets(self, n_subsets):
+        df = self.df[['ncdf_path', self.col, self.offset]].dropna()
+        df['just_date'] = df.index.date
+        groups = [df for _, df in df.groupby('just_date')]
+        cutoffs = np.arange(0, n_subsets+1)/n_subsets * len(groups)
+        groups_subsets = [groups[int(cutoffs[i]):int(cutoffs[i+1])] for i in range(len(cutoffs)-1)]
+
+        paths_subsets = []
+        for groups in groups_subsets:
+            paths = []
+            df_subset = pd.concat(groups)
+            for timestamp, row in df_subset.iterrows():
+                paths.append((timestamp, row[self.col], row[self.offset]))
+            paths_subsets.append(paths)
+        return paths_subsets
+
+    def get_total_paths(self):
+        return len(self.df[['ncdf_path', self.col, self.offset]].dropna())
+
 
 class Images(object):
     """
@@ -142,66 +175,7 @@ class Images(object):
         Arguments:
             destination {str} -- Folder where to save the crops. Preferably on the compute node ($SLURM_TMPDIR)
         """
-        def create_crops(dest: str):
-            # Iterate over all the existing timestamps
-            open_path = None
-            open_path_write = None
-            cropped_images_day = {}
-            cpt = 0
-            for time, (path, offset) in self.images_path.yield_paths():
-                # print(f'path : {path}')
-                cpt += 1
-                if cpt >= 1000:
-                    break
-                # Open hdf5 file if it is not already opened
-                if open_path != path:
-                    if open_path != None:
-                        h5_data.close()
-                        # Save cropped images
-                        with open(os.path.join(dest, str(time.date())+'.pkl'), 'wb') as f:
-                            pickle.dump(cropped_images_day, f) 
-                        cropped_images_day = {}
-                    h5_data = h5py.File(path, "r")
-                    open_path = path
-                    logger.debug(f'Opening path {open_path}')
-                
-                # Get latitude & longitude stored in the file
-                lats, lons = utils.fetch_hdf5_sample("lat", h5_data, offset), utils.fetch_hdf5_sample("lon", h5_data, offset)
-                if lats is None or lons is None:
-                    logger.warning(f'latlong of date {time} is unavailable.')
-                    continue
-                        
-                # Get data from the 5 channels
-                images = []
-                for channel in ('ch1', 'ch2', 'ch3', 'ch4', 'ch6'):
-                    img = utils.fetch_hdf5_sample(channel, h5_data, offset)
-                    if type(img) is np.ndarray:
-                        images.append(img)
-                if len(images) < 5:
-                    logger.warning(f'{5-len(images)} channels are not available at date {index}')
-                    continue
-                    
-                # Crop stations
-                cropped_images_stations = {}
-                for station_name, station_coords in stations.items():
-                    pixel_coords = (np.argmin(np.abs(lats - station_coords[0])), np.argmin(np.abs(lons - station_coords[1])))
-                        
-                    # Crop the images with the station centered
-                    pixels = self.image_size//2
-                    adjustement = self.image_size % 2 # Adjustement if image_size is odd
-                    cropped_images = []
-                    for img, mean, std in zip(images, images_mean.values(), images_std.values()):
-                        # TODO : Check if the slice is out of bounds
-                        img = (img - mean)/std # Normalize image
-                        cropped_images.append(img[pixel_coords[0]-pixels:pixel_coords[0]+pixels+adjustement,
-                                            pixel_coords[1]-pixels:pixel_coords[1]+pixels+adjustement])
-                    cropped_images_stations[station_name] = np.moveaxis(np.array(cropped_images), 0, -1)
-                cropped_images_day[time] = cropped_images_stations
-
-            # Save the last day
-            if len(cropped_images_day.keys()) > 0:
-                with open(os.path.join(dest, str(time.date())+'.pkl'), 'wb') as f:
-                    pickle.dump(cropped_images_day, f)
+        
 
         def copy_tar(source, dest, crop_folder):
             logger.info(f'Copying file {source} to {dest}')
@@ -223,9 +197,73 @@ class Images(object):
             if not os.path.exists(shared):
                 os.mkdir(shared)
             logger.info('Creating crops...')
-            create_crops(shared)
+            logger.info(f'Creating {CROP_PROCESSES_NB} threads...')
+            p = Pool(CROP_PROCESSES_NB)
+            logger.info('Dividing task...')
+            paths_subsets = self.images_path.get_paths_subsets(CROP_PROCESSES_NB)
+            args = list(zip([shared]*CROP_PROCESSES_NB, paths_subsets, [self.image_size]*CROP_PROCESSES_NB, list(range(CROP_PROCESSES_NB))))
+            logger.info(f'Sending task to {CROP_PROCESSES_NB} threads...')
+            p.map(create_crops, args)
             logger.info('Taring crops...')
             with tarfile.open(f'{shared}.tar','w') as tarf:
                 tarf.add(shared,crop_folder)
             copy_tar(f'{shared}.tar', dest, crop_folder)
         self.data_folder = dest_folder
+
+
+# Function need to be defined at the top-level of the module for multiprocessing
+def create_crops(args: tuple):
+    dest, paths, image_size, thread_nb = args
+    # Iterate over all the existing timestamps
+    open_path = None
+    open_path_write = None
+    cropped_images_day = {}
+    for time, path, offset in tqdm(paths, position=thread_nb, desc=f'Thread {thread_nb}', leave=False):
+        # Open hdf5 file if it is not already opened
+        if open_path != path:
+            if open_path != None:
+                h5_data.close()
+                # Save cropped images
+                with open(os.path.join(dest, str(time.date())+'.pkl'), 'wb') as f:
+                    pickle.dump(cropped_images_day, f) 
+                cropped_images_day = {}
+            h5_data = h5py.File(path, "r")
+            open_path = path
+        
+        # Get latitude & longitude stored in the file
+        lats, lons = utils.fetch_hdf5_sample("lat", h5_data, offset), utils.fetch_hdf5_sample("lon", h5_data, offset)
+        if lats is None or lons is None:
+            #logger.warning(f'latlong of date {time} is unavailable, skipping...')
+            continue
+                
+        # Get data from the 5 channels
+        images = []
+        for channel in ('ch1', 'ch2', 'ch3', 'ch4', 'ch6'):
+            img = utils.fetch_hdf5_sample(channel, h5_data, offset)
+            if type(img) is np.ndarray:
+                images.append(img)
+        if len(images) < 5:
+            logger.warning(f'{5-len(images)} channels are not available at date {index}, skipping...')
+            continue
+            
+        # Crop stations
+        cropped_images_stations = {}
+        for station_name, station_coords in stations.items():
+            pixel_coords = (np.argmin(np.abs(lats - station_coords[0])), np.argmin(np.abs(lons - station_coords[1])))
+                
+            # Crop the images with the station centered
+            pixels = image_size//2
+            adjustement = image_size % 2 # Adjustement if image_size is odd
+            cropped_images = []
+            for img, mean, std in zip(images, images_mean.values(), images_std.values()):
+                # TODO : Check if the slice is out of bounds
+                img = (img - mean)/std # Normalize image
+                cropped_images.append(img[pixel_coords[0]-pixels:pixel_coords[0]+pixels+adjustement,
+                                    pixel_coords[1]-pixels:pixel_coords[1]+pixels+adjustement])
+            cropped_images_stations[station_name] = np.moveaxis(np.array(cropped_images), 0, -1)
+        cropped_images_day[time] = cropped_images_stations
+
+    # Save the last day
+    if len(cropped_images_day.keys()) > 0:
+        with open(os.path.join(dest, str(time.date())+'.pkl'), 'wb') as f:
+            pickle.dump(cropped_images_day, f)

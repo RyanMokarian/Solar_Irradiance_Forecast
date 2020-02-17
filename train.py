@@ -92,6 +92,11 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     df = pd.read_pickle(df_path)
     df = preprocessing.preprocess(df, shuffle=False)
 
+    # Pre-crop data
+    logger.info('Getting crops...')
+    images = data.Images(data.ImagePaths(df), image_size)
+    images.crop(dest=SLURM_TMPDIR)
+
     # Split into train and valid
     df = df.iloc[:int(len(df.index)*subset_perc)]
     cutoff = int(len(df.index)*(1-VALID_PERC))
@@ -99,12 +104,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
 
     # Wrap dataframe
     ghis = data.GHIs(df)
-    image_paths, image_paths_train, image_paths_valid = data.ImagePaths(df), data.ImagePaths(df_train), data.ImagePaths(df_valid)
-
-    # Pre-crop data
-    logger.info('Getting crops...')
-    images = data.Images(image_paths, image_size)
-    images.crop(dest=SLURM_TMPDIR)
+    image_paths_train, image_paths_valid = data.ImagePaths(df_train), data.ImagePaths(df_valid)
     
     # Create model
     if model == 'dummy':
