@@ -4,7 +4,7 @@ import pandas as pd
 import pickle
 import random
 
-def preprocess(df: pd.DataFrame, shuffle: bool = True):
+def preprocess(df: pd.DataFrame, shuffle: bool = True, scale_label: bool = True):
     """Apply preprocessing steps on the pandas dataframe.
     
     Arguments:
@@ -14,7 +14,8 @@ def preprocess(df: pd.DataFrame, shuffle: bool = True):
         pd.DataFrame -- Preprocessed dataframe
     """
     df = df.replace('nan',np.NaN)
-    df = normalize_ghi(df)
+    if scale_label:
+        df = normalize_ghi(df)
     if shuffle:
         df = shuffle_df(df)
     return df
