@@ -1,4 +1,4 @@
-import datetime
+
 import os
 import numpy as np
 import pandas as pd
@@ -7,6 +7,7 @@ import pickle
 import shutil
 import tarfile
 import h5py
+from datetime import datetime
 from utils import utils
 from tqdm import tqdm
 from multiprocessing import Pool
@@ -169,7 +170,36 @@ class Metadata(object):
         """
         index = self.get_timestamps()
         cutoff = int(len(index)*(1-valid_perc))
-        return Metadata(self.df.loc[index[:cutoff], :]), Metadata(self.df.loc[index[cutoff:], :])
+        return Metadata(self.df.loc[index[:cutoff]]), Metadata(self.df.loc[index[cutoff:]])
+
+    def split_with_dates(self, dates: list = ['2013-01','2014-06','2012-08','2011-03','2010-10']):
+        """Splits the data into a training and validation set. Uses the dates in the validation set.
+        
+        Arguments:
+            dates {list} -- List of string dates in the YYYYMM format. (default: {['2013-01','2014-06','2012-08','2011-03','2010-10']})
+
+        Returns:
+            tuple -- Tuple of data.Metadata objects. Respectively train and validation.
+        """
+        train_idx, valid_idx = [], []
+        for date in dates:
+            if len(date) == 4:
+                for index in self.get_timestamps():
+                    if date == str(index.year):
+                        valid_idx.append(index)
+                    else:
+                        train_idx.append(index)
+            elif len(date) == 7:
+                year, month = date.split('-')
+                for index in self.get_timestamps():
+                    if year == str(index.year) and month == str(index.month):
+                        valid_idx.append(index)
+                    else:
+                        train_idx.append(index)
+            else:
+                logger.error(f'Date format not recognised : {date}')
+            
+        return Metadata(self.df.loc[train_idx]), Metadata(self.df.loc[valid_idx])
 
     def __len__(self):
         return len(self.get_timestamps())
