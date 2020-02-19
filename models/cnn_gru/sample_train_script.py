@@ -7,6 +7,7 @@ import tensorflow as tf
 from tensorflow import keras,data
 from tensorflow.keras import layers,models,activations
 from model_utils import *
+from cnn_gru import *
 
 
 model = Full_Model(CNN,Encoder,Decoder,BahdanauAttention)
