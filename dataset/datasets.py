@@ -32,15 +32,14 @@ class SolarIrradianceDataset(tf.data.Dataset):
                                                         'images': tf.float32,
                                                         'csky_ghi': tf.float32,
                                                         'ghi': tf.float32},
-                                             output_shapes={'index': tf.TensorShape([]),
-                                                        'hdf5_8bit_path': tf.TensorShape([]),
+                                             output_shapes={'hdf5_8bit_path': tf.TensorShape([]),
                                                         'hdf5_8bit_offset': tf.TensorShape([]),
                                                         'station_name': tf.TensorShape([]),
                                                         'station_lat': tf.TensorShape([]),
                                                         'station_long': tf.TensorShape([]),
                                                         'images': tf.TensorShape([image_size, image_size, 5]),
                                                         'csky_ghi': tf.TensorShape([]),
-                                                        'ghi': tf.TensorShape([])}).prefetch(tf.data.experimental.AUTOTUNE)
+                                                        'ghi': tf.TensorShape([])}).prefetch(tf.data.experimental.AUTOTUNE).cache()
 
 class DataGenerator(object):
     """
@@ -62,7 +61,6 @@ class DataGenerator(object):
                          'SXF':(43.73403,-96.62328)}
 
     def get_next_example(self):
-        # TODO : shuffle dataframe while keeping examples from the same file together (to improve performance)
         
         # Iterate over all rows of the dataframe
         open_path = None
@@ -116,8 +114,7 @@ class DataGenerator(object):
                                           pixel_coords[1]-pixels:pixel_coords[1]+pixels+adjustement])
                 cropped_images = tf.convert_to_tensor(np.moveaxis(np.array(cropped_images), 0, -1))
                     
-                yield ({'date': index,
-                        'hdf5_8bit_path': hdf5_8bit_path, 
+                yield ({'hdf5_8bit_path': hdf5_8bit_path, 
                         'hdf5_8bit_offset': hdf5_8bit_offset,
                         'station_name': station_name,
                         'station_lat': pixel_coords[0],

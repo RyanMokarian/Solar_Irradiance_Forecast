@@ -35,7 +35,7 @@ class DataGenerator(object):
     def get_next_example(self):
         
         for time in self.metadata.get_timestamps():
-            #logger.info(f'Processing {time}')
+
             for station in data.stations.keys():
                 if self.metadata.is_night(time, station):
                     continue

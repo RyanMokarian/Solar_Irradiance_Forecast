@@ -10,11 +10,10 @@ import h5py
 from utils import utils
 from tqdm import tqdm
 from multiprocessing import Pool
-from pathlib import Path
-Path.ls = lambda x:list(x.iterdir())
+from collections import deque
 logger = logging.getLogger('logger')
 
-CROP_PROCESSES_NB = 8
+CROP_PROCESSES_NB = 4
 
 stations = {'BND':(40.05192,-88.37309), 'TBL':(40.12498,-105.2368),
             'DRA':(36.62373,-116.01947), 'FPK':(48.30783,-105.1017),
@@ -28,6 +27,8 @@ images_std = {'ch1': 0.30688239459685107, 'ch2': 60.6773046722939,
                     'ch6': 54.37427451580163}
 
 class Metadata(object):
+    """Wrapper class to handle metadata dataframe."""
+
     def __init__(self, df, eight_bits=True):
         self.df = df
         self.col_path = 'hdf5_8bit_path' if eight_bits else 'hdf5_16bit_path'
@@ -36,17 +37,41 @@ class Metadata(object):
         self.col_ghi = [s+'_GHI' for s in stations.keys()]
 
     def ghis_exist(self, timestamp: datetime):
+        """Checks if GHI values exist in the dataframe for a particular timestamp.
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp for which to check.
+        
+        Returns:
+            bool -- True if the GHIs exist, False otherwise.
+        """
         return timestamp in self.df.index \
                and not self.df.loc[timestamp, self.col_ghi].isna().any() \
                and not self.df.loc[timestamp, self.col_csky].isna().any()
 
     def path_exist(self, timestamp: datetime):
+        """Checks if a path exist in the dataframe for a particular timestamp.
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp for which to check.
+        
+        Returns:
+            bool -- True if the path exist, False otherwise.
+        """
         return timestamp in self.df.index \
                 and self.df.loc[timestamp, 'ncdf_path'] is not np.NaN \
                 and self.df.loc[timestamp, self.col_path] is not np.NaN \
                 and self.df.loc[timestamp, self.col_offset] is not np.NaN
 
     def get_ghis(self, timestamp: datetime):
+        """Gets the GHIs for all stations for a particular timestamp.
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp of the GHIs.
+        
+        Returns:
+            dict -- dict were keys are the station names and values are the GHIs.
+        """
         if not self.ghis_exist(timestamp):
             empty_values = dict(zip(stations.keys(), [0]*len(stations.keys())))
             return empty_values, empty_values # TODO : Interpolate
@@ -55,165 +80,99 @@ class Metadata(object):
         return ghis, csky_ghis
 
     def get_ghi(self, timestamp: datetime, station: str):
+        """Gets the GHI for one station for a particular timestamp.
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp of the requested GHI.
+            station {str} -- The station of the requested GHI.
+        
+        Returns:
+            tuple -- GHI, Clearsky GHI
+        """
         ghis, csky_ghis = self.get_ghis(timestamp)
         return ghis[station], csky_ghis[station]
 
     def get_path(self, timestamp: datetime):
+        """Gets the path of the hdf5 file for a particular datetime.
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp of the required path.
+        
+        Returns:
+            tuple -- Path, Offset
+        """
         if not self.path_exist(timestamp):
             return None
         return self.df.loc[timestamp, self.col_path], self.df.loc[timestamp, self.col_offset]
 
     def get_paths_subsets(self, n_subsets):
-        df = self.df[['ncdf_path', self.col, self.offset]].dropna()
+        """Divides the paths into n_subsets. This is useful to process data using n threads.
+        
+        Arguments:
+            n_subsets {int} -- Number of subsets
+        
+        Returns:
+            list -- List of list of paths.
+        """
+        df = self.df[['ncdf_path', self.col_path, self.col_offset]].dropna()
+
+        # Group data by day (each day is saved in one file)
         df['just_date'] = df.index.date
         groups = [df for _, df in df.groupby('just_date')]
+
+        # Divide the days into n_subsets sets
         cutoffs = np.arange(0, n_subsets+1)/n_subsets * len(groups)
         groups_subsets = [groups[int(cutoffs[i]):int(cutoffs[i+1])] for i in range(len(cutoffs)-1)]
+
+        # Create a list of tuple (time, path, offset)
         paths_subsets = []
         for groups in groups_subsets:
             paths = []
             df_subset = pd.concat(groups)
             for timestamp, row in df_subset.iterrows():
-                paths.append((timestamp, row[self.col], row[self.offset]))
+                paths.append((timestamp, row[self.col_path], row[self.col_offset]))
             paths_subsets.append(paths)
+
         return paths_subsets
 
     def is_night(self, timestamp: datetime, station: str):
+        """Checks if it is night at a given time and station.
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp for which to check.
+            station {str} -- The station for wich to check.
+        
+        Returns:
+            bool -- True if it is night, False otherwise.
+        """
         if timestamp not in self.df.index:
             logger.warning(f'is_night : could not find {timestamp}.')
             return True
         return self.df.loc[timestamp, station + '_DAYTIME'] == 0
 
     def get_timestamps(self):
+        """Gets the valid timestamps.
+        
+        Returns:
+            list -- List of valid timestamps.
+        """
         return self.df[['ncdf_path', self.col_path, self.col_offset] + self.col_csky + self.col_ghi].dropna().index
 
-    def split(self, valid_perc=0.2):
+    def split(self, valid_perc: float = 0.2):
+        """Splits the data into a training and validation set.
+        
+        Keyword Arguments:
+            valid_perc {float} -- Percentage of the data to use in the validation set. (default: {0.2})
+        
+        Returns:
+            tuple -- Tuple of data.Metadata objects. Respectively train and validation.
+        """
         index = self.get_timestamps()
         cutoff = int(len(index)*(1-valid_perc))
         return Metadata(self.df.loc[index[:cutoff], :]), Metadata(self.df.loc[index[cutoff:], :])
 
     def __len__(self):
         return len(self.get_timestamps())
-
-class GHIs(object):
-    """
-    Class that wraps the metadata dataframe to provide an interface on the GHIs values.
-    """
-    def __init__(self, df):
-        self.df = df.replace('nan',np.NaN)
-        self.col_csky = [s+'_CLEARSKY_GHI' for s in stations.keys()]
-        self.col_ghi = [s+'_GHI' for s in stations.keys()]
-
-    def get_ghis(self, timestamp: datetime):
-        if not self.exists(timestamp):
-            return 0, 0 # TODO : Interpolate
-        ghis = dict(zip(stations.keys(), list(self.df.loc[timestamp, self.col_ghi])))
-        csky_ghis = dict(zip(stations.keys(), list(self.df.loc[timestamp, self.col_csky])))
-        return ghis, csky_ghis
-
-    def get_ghi(self, timestamp: datetime, station: str):
-        ghis, csky_ghis = self.get_ghis(timestamp)
-        if type(ghis) == dict and type(csky_ghis) == dict:
-            return ghis[station], csky_ghis[station]
-        else:
-            return ghis, csky_ghis
-    
-    def exists(self, timestamp: datetime):
-        if timestamp not in self.df.index:
-            #logger.warning(f'Timestamp \"{timestamp}\" not found in the metadata dataframe. Every timestamps are supposed to be there.')
-            return False
-        return not self.df.loc[timestamp, self.col_ghi].isna().any() and not self.df.loc[timestamp, self.col_csky].isna().any()
-
-    def get_timestamps(self):
-        return self.df.index
-
-class ImagePaths(object):
-    """
-    Class that wraps the metadata dataframe to get image paths
-    """
-    def __init__(self, df, eight_bits=True):
-        self.df = df.replace('nan',np.NaN)
-        self.col = 'hdf5_8bit_path' if eight_bits else 'hdf5_16bit_path'
-        self.offset = 'hdf5_8bit_offset' if eight_bits else 'hdf5_16bit_path'
-    
-    def get_path(self, timestamp: datetime):
-        """Get path of the images for a given timestamp
-        
-        Arguments:
-            timestamp {datetime} -- Timestamp corresponding to the desired image
-        
-        Returns:
-            (string, int) -- Path and offset of the desired image if it exist or None
-        """
-        if not self.exists(timestamp):
-            return None
-
-        return self.df.loc[timestamp, self.col], self.df.loc[timestamp, self.offset]
-
-    def exists(self, timestamp: datetime):
-        """Checks if image exists for a given timestamp
-        
-        Arguments:
-            timestamp {datetime} -- Timestamp corresponding to an image
-        
-        Returns:
-            bool -- True if the image exist, False otherwise
-        """
-        if timestamp not in self.df.index:
-            #logger.warning(f'Timestamp \"{timestamp}\" not found in the metadata dataframe. Every timestamps are supposed to be there.')
-            return False
-
-        return self.df.loc[timestamp, 'ncdf_path'] is not np.NaN \
-                and self.df.loc[timestamp, self.col] is not np.NaN \
-                and self.df.loc[timestamp, self.offset] is not np.NaN
-    
-    def is_night(self, timestamp: datetime, station: str):
-        return self.df.loc[timestamp, station + '_DAYTIME'] == 0
-    
-    def yield_paths(self):
-        for time in self.get_timestamps():
-            if self.exists(time):
-                yield time, self.get_path(time)
-
-    def yield_time(self):
-        for time in self.get_timestamps():
-            if self.exists(time):
-                yield time
-
-    def get_timestamps(self):
-        return self.df.index
-
-    def get_paths(self):
-        paths = []
-        for timestamp, row in self.df[['ncdf_path', self.col, self.offset]].dropna().iterrows():
-            paths.append((timestamp, row[self.col], row[self.offset]))
-        return paths
-
-    def get_paths_subsets(self, n_subsets):
-        df = self.df[['ncdf_path', self.col, self.offset]].dropna()
-        df['just_date'] = df.index.date
-        groups = [df for _, df in df.groupby('just_date')]
-        #print(f'length of groups : {len(groups)}')
-        cutoffs = np.arange(0, n_subsets+1)/n_subsets * len(groups)
-        #print(f'cutoffs : {cutoffs}')
-        groups_subsets = [groups[int(cutoffs[i]):int(cutoffs[i+1])] for i in range(len(cutoffs)-1)]
-        #print(f'length of groups_subset : {len(groups_subsets)}')
-        #print(f'length of groups_subset[0] : {len(groups_subsets[0])}')
-
-
-        paths_subsets = []
-        for groups in groups_subsets:
-            paths = []
-            df_subset = pd.concat(groups)
-            for timestamp, row in df_subset.iterrows():
-                paths.append((timestamp, row[self.col], row[self.offset]))
-            paths_subsets.append(paths)
-
-        return paths_subsets
-
-    def get_total_paths(self):
-        return len(self.df[['ncdf_path', self.col, self.offset]].dropna())
-
 
 class Images(object):
     """
@@ -224,27 +183,57 @@ class Images(object):
         self.image_size = image_size
         self.shared_storage = '/project/cq-training-1/project1/teams/team12/'
         self.data_folder = None
+        self.cache = {}
 
     def get_images(self, timestamp: datetime):
+        """Gets the images for all stations for a particular timestamp.
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp of the images.
+        
+        Returns:
+            dict -- dict were keys are the station names and values are the images.
+        """
         if self.data_folder is None:
-            raise Exception('Data folder not set, call \"Images.crop\" before calling \"Images.get_images\".')
+            raise Exception('Data folder not set, call "Images.crop" before calling "Images.get_images".')
+        
+        # Check if image is in the cache
+        if timestamp in self.cache.keys():
+            return self.cache[timestamp]
+        
+        # Check if the image is saved on disk
         file_path = os.path.join(self.data_folder, str(timestamp.date())+'.pkl')
         if not os.path.exists(file_path):
             return np.zeros((self.image_size, self.image_size, 5))
+        
+        # Read the file and update the cache
         with open(file_path, 'rb') as f:
             day_data = pickle.load(f)
+        self.cache = day_data
+
+        # Check that the image is in file
         if timestamp not in day_data.keys():
             return np.zeros((self.image_size, self.image_size, 5))
+
         return day_data[timestamp]
 
     def get_image(self, timestamp: datetime, station: str):
+        """Gets the channels for one stations for a particular timestamp.
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp of the requested image.
+            station {str} -- The station of the requested image.
+        
+        Returns:
+            np.array -- Channels of the requested image.
+        """
         images = self.get_images(timestamp)
         if type(images) == dict:
             return images[station]
         return images
 
     def crop(self, dest: str):
-        """Crops images and save them to destination. Only saves them to destination if images already exists on shared drive.
+        """Crops images and save them to destination.
         
         Arguments:
             destination {str} -- Folder where to save the crops. Preferably on the compute node ($SLURM_TMPDIR)
@@ -256,26 +245,27 @@ class Images(object):
             with tarfile.open(f'{os.path.join(dest,crop_folder)}.tar', 'r') as tarf:
                 tarf.extractall(dest)
         
-        # Crop only if destination folder do not exist
         crop_folder = f'crop-{self.image_size}'
-        
         dest_folder = os.path.join(dest,crop_folder)
         shared = os.path.join(self.shared_storage, crop_folder)
-        if os.path.exists(dest_folder) and len(os.listdir(dest_folder)) > 0:
+
+        if os.path.exists(dest_folder) and len(os.listdir(dest_folder)) > 0: 
             logger.info(f'Data already exist in destination {dest_folder}')
         elif os.path.exists(f'{shared}.tar'):
             copy_tar(f'{shared}.tar', dest, crop_folder)
-        else:
+        else: # Crop only if destination folder do not exist
             if not os.path.exists(shared):
                 os.makedirs(shared)
-            logger.info('Creating crops...')
-            logger.info(f'Creating {CROP_PROCESSES_NB} threads...')
+
+            # Cropping data
+            logger.info(f'Creating {CROP_PROCESSES_NB} threads to crop data...')
             p = Pool(CROP_PROCESSES_NB)
             logger.info('Dividing task...')
             paths_subsets = self.metadata.get_paths_subsets(CROP_PROCESSES_NB)
             args = list(zip([shared]*CROP_PROCESSES_NB, paths_subsets, [self.image_size]*CROP_PROCESSES_NB, list(range(CROP_PROCESSES_NB))))
             logger.info(f'Sending task to {CROP_PROCESSES_NB} threads...')
             p.map(create_crops, args)
+
             logger.info('Taring crops...')
             with tarfile.open(f'{shared}.tar','w') as tarf:
                 tarf.add(shared,crop_folder)
@@ -285,6 +275,12 @@ class Images(object):
 
 # Function need to be defined at the top-level of the module for multiprocessing
 def create_crops(args: tuple):
+    """Function executed by multiple threads to create crops around stations 
+        and save them to disk as pickle.
+    
+    Arguments:
+        args {tuple} -- dest, paths, image_size, thread_nb
+    """
     dest, paths, image_size, thread_nb = args
     # Iterate over all the existing timestamps
     open_path = None

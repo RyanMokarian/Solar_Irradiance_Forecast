@@ -9,7 +9,6 @@ import tensorflow as tf
 from tqdm import tqdm
 from models import baselines
 from dataset.datasets import SolarIrradianceDataset
-from dataset.crop_dataset import CropDataset
 from dataset.sequence_dataset import SequenceDataset
 from utils import preprocessing
 from utils import utils
@@ -34,11 +33,8 @@ logger = logging.get_logger()
 
 def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_examples):
     total_loss, nb_batch = 0, 0
-    logger.debug(f'total_examples : {total_examples}, batch_size : {batch_size}')
-    logger.debug(f'total : {total_examples//batch_size}')
-    for batch in tqdm(data_loader.batch(batch_size), total=(total_examples//batch_size), desc='train epoch', leave=False):
+    for batch in tqdm(data_loader.batch(batch_size), total=(np.ceil(total_examples/batch_size)), desc='train epoch', leave=False):
         images, labels = batch['images'], batch['ghi']
-        #logger.debug(f'Received images with shape : {images.shape}')
         with tf.GradientTape() as tape:
             preds = model(images)
             loss = loss_function(y_true=labels, y_pred=preds)
@@ -48,9 +44,9 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
         
         # Tensorboard logging
         if nb_batch % BATCH_LOG_INTERVAL == 0: 
-            with train_summary_writer.as_default():
-                #tf.summary.image(f"GHIs : {labels[0].numpy()}", np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch, max_outputs=5)
-                tf.summary.image(f"Training data sample", np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch, max_outputs=5)
+            if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
+                with train_summary_writer.as_default():
+                    tf.summary.image(f'Training data sample', np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch, max_outputs=5)
 
         nb_batch += 1
 
@@ -58,7 +54,7 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
 
 def test_epoch(model, data_loader, batch_size, loss_function, total_examples):
     total_loss, total_loss_csky, nb_batch = 0, 0, 0
-    for batch in tqdm(data_loader.batch(batch_size), total=(total_examples//batch_size), desc='valid epoch', leave=False):
+    for batch in tqdm(data_loader.batch(batch_size), total=(np.ceil(total_examples/batch_size)), desc='valid epoch', leave=False):
         images, labels, preds_csky = batch['images'], batch['ghi'], batch['csky_ghi']
         preds = model(images)
         total_loss += loss_function(y_true=labels, y_pred=preds)
@@ -96,18 +92,11 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     images.crop(dest=SLURM_TMPDIR)
 
     # Split into train and valid
-    # df = df.iloc[:int(len(df.index)*subset_perc)]
-    # cutoff = int(len(df.index)*(1-VALID_PERC))
-    # df_train, df_valid = df.iloc[:cutoff], df.iloc[cutoff:]
     metadata, _ = metadata.split(1-subset_perc)
     metadata_train, metadata_valid = metadata.split(VALID_PERC)
     nb_train_examples, nb_valid_examples = len(metadata_train)*len(data.stations.keys()), len(metadata_valid)*len(data.stations.keys())
     logger.info(f'Number of training examples : {nb_train_examples}, number of validation examples : {nb_valid_examples}')
 
-    # Wrap dataframe
-    # ghis = data.GHIs(df)
-    # image_paths_train, image_paths_valid = data.ImagePaths(df_train), data.ImagePaths(df_valid)
-    
     # Create model
     if model == 'dummy':
         model = baselines.DummyModel()
@@ -118,7 +107,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     elif model == 'sunset3d':
         model = baselines.Sunset3DModel(seq_len)
     else:
-        raise Exception(f'Model \"{model}\" not recognized.')
+        raise Exception(f'Model "{model}" not recognized.')
         
     # Load model weights
     if saved_model_dir is not None:
@@ -131,13 +120,17 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     elif optimizer == 'sgd':
         optimizer = tf.keras.optimizers.SGD(lr)
     else:
-        raise Exception(f'Optimizer \"{optimizer}\" not recognized.')
+        raise Exception(f'Optimizer "{optimizer}" not recognized.')
     
     if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
         # Create data loader
         dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len)
         dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len)
-    else:
+    else:# TODO : Remove this else when we don't need older models
+        df = df.dropna()
+        df = df.iloc[:int(len(df.index)*subset_perc)]
+        cutoff = int(len(df.index)*(1-VALID_PERC))
+        df_train, df_valid = df.iloc[:cutoff], df.iloc[cutoff:]
         dataloader_train = SolarIrradianceDataset(df_train, image_size)
         dataloader_valid = SolarIrradianceDataset(df_valid, image_size)
     
