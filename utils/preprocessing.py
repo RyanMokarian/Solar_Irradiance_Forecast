@@ -4,7 +4,7 @@ import pandas as pd
 import pickle
 import random
 
-def preprocess(df: pd.DataFrame, shuffle: bool = True):
+def preprocess(df: pd.DataFrame, shuffle: bool = True, scale_label: bool = True):
     """Apply preprocessing steps on the pandas dataframe.
     
     Arguments:
@@ -13,11 +13,9 @@ def preprocess(df: pd.DataFrame, shuffle: bool = True):
     Returns:
         pd.DataFrame -- Preprocessed dataframe
     """
-    # Drops rows where file information is unavailable
     df = df.replace('nan',np.NaN)
-    df = df[df.ncdf_path.notna()] # TODO : Check the difference with 'df = df.dropna()'
-    
-    df = normalize_ghi(df)
+    if scale_label:
+        df = normalize_ghi(df)
     if shuffle:
         df = shuffle_df(df)
     return df

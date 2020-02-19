@@ -39,7 +39,7 @@ class SolarIrradianceDataset(tf.data.Dataset):
                                                         'station_long': tf.TensorShape([]),
                                                         'images': tf.TensorShape([image_size, image_size, 5]),
                                                         'csky_ghi': tf.TensorShape([]),
-                                                        'ghi': tf.TensorShape([])}).prefetch(tf.data.experimental.AUTOTUNE)
+                                                        'ghi': tf.TensorShape([])}).prefetch(tf.data.experimental.AUTOTUNE).cache()
 
 class DataGenerator(object):
     """
@@ -61,7 +61,6 @@ class DataGenerator(object):
                          'SXF':(43.73403,-96.62328)}
 
     def get_next_example(self):
-        # TODO : shuffle dataframe while keeping examples from the same file together (to improve performance)
         
         # Iterate over all rows of the dataframe
         open_path = None
