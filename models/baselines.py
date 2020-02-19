@@ -45,7 +45,7 @@ class SunsetModel(tf.keras.Model):
         return x
 
 class Sunset3DModel(tf.keras.Model):
-    def __init__(self, seq_len):
+    def __init__(self):
         super(Sunset3DModel, self).__init__()
         self.conv1 = tf.keras.layers.Conv3D(12, (3, 3, 3), activation='relu', padding='same')
         self.conv2 = tf.keras.layers.Conv3D(24, (3, 3, 3), activation='relu', padding='same')
@@ -106,3 +106,25 @@ class ConvDemModel(tf.keras.Model):
         x = self.dense(x)
 
         return x
+
+class ConvLSTM(tf.keras.Model)
+    def __init__(self):
+        super(ConvLSTM, self).__init__()
+        self.conv1 = tf.keras.layers.ConvLSTM2D(128, (5, 5))
+        self.conv2 = tf.keras.layers.ConvLSTM2D(64, (5, 5))
+        self.conv3 = tf.keras.layers.ConvLSTM2D(64, (5, 5))
+        self.flatten = tf.keras.layers.Flatten()
+        self.dense1 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
+        self.dense2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(4, activation=None)
+    
+    def call(self, inputs):
+        x = self.conv1(inputs)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.flatten(x)
+        x = self.dense1(x)
+        x = self.dense2(x)
+        x = self.dense3(x)
+        return x
+

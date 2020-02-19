@@ -44,7 +44,7 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
         
         # Tensorboard logging
         if nb_batch % BATCH_LOG_INTERVAL == 0: 
-            if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
+            if model.__class__.__name__ in ['Sunset3DModel', 'ConvLSTM']: # Temporary if to not break older models
                 with train_summary_writer.as_default():
                     tf.summary.image(f'Training data sample', np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch, max_outputs=5)
 
@@ -105,7 +105,9 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     elif model == 'cnndem':
         model = baselines.ConvDemModel(image_size)
     elif model == 'sunset3d':
-        model = baselines.Sunset3DModel(seq_len)
+        model = baselines.Sunset3DModel()
+    elif model == 'convlstm':
+        model = baselines.ConvLSTM()
     else:
         raise Exception(f'Model "{model}" not recognized.')
         
@@ -122,7 +124,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     else:
         raise Exception(f'Optimizer "{optimizer}" not recognized.')
     
-    if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
+    if model.__class__.__name__ in ['Sunset3DModel', 'ConvLSTM']: # Temporary if to not break older models
         # Create data loader
         dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len)
         dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len)
