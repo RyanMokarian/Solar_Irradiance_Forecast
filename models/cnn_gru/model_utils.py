@@ -30,6 +30,134 @@ from tensorflow.tools.docs import doc_controls
 
 
 
+
+class DropoutRNNCellMixin(object):
+  """Object that hold dropout related fields for RNN Cell.
+  This class is not a standalone RNN cell. It suppose to be used with a RNN cell
+  by multiple inheritance. Any cell that mix with class should have following
+  fields:
+    dropout: a float number within range [0, 1). The ratio that the input
+      tensor need to dropout.
+    recurrent_dropout: a float number within range [0, 1). The ratio that the
+      recurrent state weights need to dropout.
+  This object will create and cache created dropout masks, and reuse them for
+  the incoming data, so that the same mask is used for every batch input.
+  """
+
+  def __init__(self, *args, **kwargs):
+    # Note that the following two masks will be used in "graph function" mode,
+    # e.g. these masks are symbolic tensors. In eager mode, the `eager_*_mask`
+    # tensors will be generated differently than in the "graph function" case,
+    # and they will be cached.
+    # Also note that in graph mode, we still cache those masks only because the
+    # RNN could be created with `unroll=True`. In that case, the `cell.call()`
+    # function will be invoked multiple times, and we want to ensure same mask
+    # is used every time.
+    self._dropout_mask = None
+    self._recurrent_dropout_mask = None
+    self._eager_dropout_mask = None
+    self._eager_recurrent_dropout_mask = None
+    super(DropoutRNNCellMixin, self).__init__(*args, **kwargs)
+
+  def reset_dropout_mask(self):
+    """Reset the cached dropout masks if any.
+    This is important for the RNN layer to invoke this in it call() method so
+    that the cached mask is cleared before calling the cell.call(). The mask
+    should be cached across the timestep within the same batch, but shouldn't
+    be cached between batches. Otherwise it will introduce unreasonable bias
+    against certain index of data within the batch.
+    """
+    self._dropout_mask = None
+    self._eager_dropout_mask = None
+
+  def reset_recurrent_dropout_mask(self):
+    """Reset the cached recurrent dropout masks if any.
+    This is important for the RNN layer to invoke this in it call() method so
+    that the cached mask is cleared before calling the cell.call(). The mask
+    should be cached across the timestep within the same batch, but shouldn't
+    be cached between batches. Otherwise it will introduce unreasonable bias
+    against certain index of data within the batch.
+    """
+    self._recurrent_dropout_mask = None
+    self._eager_recurrent_dropout_mask = None
+
+  def get_dropout_mask_for_cell(self, inputs, training, count=1):
+    """Get the dropout mask for RNN cell's input.
+    It will create mask based on context if there isn't any existing cached
+    mask. If a new mask is generated, it will update the cache in the cell.
+    Args:
+      inputs: The input tensor whose shape will be used to generate dropout
+        mask.
+      training: Boolean tensor, whether its in training mode, dropout will be
+        ignored in non-training mode.
+      count: Int, how many dropout mask will be generated. It is useful for cell
+        that has internal weights fused together.
+    Returns:
+      List of mask tensor, generated or cached mask based on context.
+    """
+    if self.dropout == 0:
+      return None
+    if (not context.executing_eagerly() and self._dropout_mask is None
+        or context.executing_eagerly() and self._eager_dropout_mask is None):
+      # Generate new mask and cache it based on context.
+      dp_mask = _generate_dropout_mask(
+          array_ops.ones_like(inputs),
+          self.dropout,
+          training=training,
+          count=count)
+      if context.executing_eagerly():
+        self._eager_dropout_mask = dp_mask
+      else:
+        self._dropout_mask = dp_mask
+    else:
+      # Reuse the existing mask.
+      dp_mask = (self._eager_dropout_mask
+                 if context.executing_eagerly() else self._dropout_mask)
+    return dp_mask
+
+  def get_recurrent_dropout_mask_for_cell(self, inputs, training, count=1):
+    """Get the recurrent dropout mask for RNN cell.
+    It will create mask based on context if there isn't any existing cached
+    mask. If a new mask is generated, it will update the cache in the cell.
+    Args:
+      inputs: The input tensor whose shape will be used to generate dropout
+        mask.
+      training: Boolean tensor, whether its in training mode, dropout will be
+        ignored in non-training mode.
+      count: Int, how many dropout mask will be generated. It is useful for cell
+        that has internal weights fused together.
+    Returns:
+      List of mask tensor, generated or cached mask based on context.
+    """
+    if self.recurrent_dropout == 0:
+      return None
+    if (not context.executing_eagerly() and self._recurrent_dropout_mask is None
+        or context.executing_eagerly()
+        and self._eager_recurrent_dropout_mask is None):
+      # Generate new mask and cache it based on context.
+      rec_dp_mask = _generate_dropout_mask(
+          array_ops.ones_like(inputs),
+          self.recurrent_dropout,
+          training=training,
+          count=count)
+      if context.executing_eagerly():
+        self._eager_recurrent_dropout_mask = rec_dp_mask
+      else:
+        self._recurrent_dropout_mask = rec_dp_mask
+    else:
+      # Reuse the existing mask.
+      rec_dp_mask = (self._eager_recurrent_dropout_mask
+                     if context.executing_eagerly()
+                     else self._recurrent_dropout_mask)
+    return rec_dp_mask
+
+
+
+
+
+
+
+
 class CNN_GRU_Cell(DropoutRNNCellMixin, Layer):
   """Cell class for the GRU layer.
   Arguments:
@@ -301,123 +429,3 @@ class CNN_GRU_Cell(DropoutRNNCellMixin, Layer):
 
 
 
-
-class DropoutRNNCellMixin(object):
-  """Object that hold dropout related fields for RNN Cell.
-  This class is not a standalone RNN cell. It suppose to be used with a RNN cell
-  by multiple inheritance. Any cell that mix with class should have following
-  fields:
-    dropout: a float number within range [0, 1). The ratio that the input
-      tensor need to dropout.
-    recurrent_dropout: a float number within range [0, 1). The ratio that the
-      recurrent state weights need to dropout.
-  This object will create and cache created dropout masks, and reuse them for
-  the incoming data, so that the same mask is used for every batch input.
-  """
-
-  def __init__(self, *args, **kwargs):
-    # Note that the following two masks will be used in "graph function" mode,
-    # e.g. these masks are symbolic tensors. In eager mode, the `eager_*_mask`
-    # tensors will be generated differently than in the "graph function" case,
-    # and they will be cached.
-    # Also note that in graph mode, we still cache those masks only because the
-    # RNN could be created with `unroll=True`. In that case, the `cell.call()`
-    # function will be invoked multiple times, and we want to ensure same mask
-    # is used every time.
-    self._dropout_mask = None
-    self._recurrent_dropout_mask = None
-    self._eager_dropout_mask = None
-    self._eager_recurrent_dropout_mask = None
-    super(DropoutRNNCellMixin, self).__init__(*args, **kwargs)
-
-  def reset_dropout_mask(self):
-    """Reset the cached dropout masks if any.
-    This is important for the RNN layer to invoke this in it call() method so
-    that the cached mask is cleared before calling the cell.call(). The mask
-    should be cached across the timestep within the same batch, but shouldn't
-    be cached between batches. Otherwise it will introduce unreasonable bias
-    against certain index of data within the batch.
-    """
-    self._dropout_mask = None
-    self._eager_dropout_mask = None
-
-  def reset_recurrent_dropout_mask(self):
-    """Reset the cached recurrent dropout masks if any.
-    This is important for the RNN layer to invoke this in it call() method so
-    that the cached mask is cleared before calling the cell.call(). The mask
-    should be cached across the timestep within the same batch, but shouldn't
-    be cached between batches. Otherwise it will introduce unreasonable bias
-    against certain index of data within the batch.
-    """
-    self._recurrent_dropout_mask = None
-    self._eager_recurrent_dropout_mask = None
-
-  def get_dropout_mask_for_cell(self, inputs, training, count=1):
-    """Get the dropout mask for RNN cell's input.
-    It will create mask based on context if there isn't any existing cached
-    mask. If a new mask is generated, it will update the cache in the cell.
-    Args:
-      inputs: The input tensor whose shape will be used to generate dropout
-        mask.
-      training: Boolean tensor, whether its in training mode, dropout will be
-        ignored in non-training mode.
-      count: Int, how many dropout mask will be generated. It is useful for cell
-        that has internal weights fused together.
-    Returns:
-      List of mask tensor, generated or cached mask based on context.
-    """
-    if self.dropout == 0:
-      return None
-    if (not context.executing_eagerly() and self._dropout_mask is None
-        or context.executing_eagerly() and self._eager_dropout_mask is None):
-      # Generate new mask and cache it based on context.
-      dp_mask = _generate_dropout_mask(
-          array_ops.ones_like(inputs),
-          self.dropout,
-          training=training,
-          count=count)
-      if context.executing_eagerly():
-        self._eager_dropout_mask = dp_mask
-      else:
-        self._dropout_mask = dp_mask
-    else:
-      # Reuse the existing mask.
-      dp_mask = (self._eager_dropout_mask
-                 if context.executing_eagerly() else self._dropout_mask)
-    return dp_mask
-
-  def get_recurrent_dropout_mask_for_cell(self, inputs, training, count=1):
-    """Get the recurrent dropout mask for RNN cell.
-    It will create mask based on context if there isn't any existing cached
-    mask. If a new mask is generated, it will update the cache in the cell.
-    Args:
-      inputs: The input tensor whose shape will be used to generate dropout
-        mask.
-      training: Boolean tensor, whether its in training mode, dropout will be
-        ignored in non-training mode.
-      count: Int, how many dropout mask will be generated. It is useful for cell
-        that has internal weights fused together.
-    Returns:
-      List of mask tensor, generated or cached mask based on context.
-    """
-    if self.recurrent_dropout == 0:
-      return None
-    if (not context.executing_eagerly() and self._recurrent_dropout_mask is None
-        or context.executing_eagerly()
-        and self._eager_recurrent_dropout_mask is None):
-      # Generate new mask and cache it based on context.
-      rec_dp_mask = _generate_dropout_mask(
-          array_ops.ones_like(inputs),
-          self.recurrent_dropout,
-          training=training,
-          count=count)
-      if context.executing_eagerly():
-        self._eager_recurrent_dropout_mask = rec_dp_mask
-      else:
-        self._recurrent_dropout_mask = rec_dp_mask
-    else:
-      # Reuse the existing mask.
-      rec_dp_mask = (self._eager_recurrent_dropout_mask
-                     if context.executing_eagerly()
-                     else self._recurrent_dropout_mask)
-    return rec_dp_mask
