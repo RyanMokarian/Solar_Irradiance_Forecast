@@ -50,7 +50,7 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
 
         nb_batch += 1
 
-    return total_loss/nb_batch # Average total epoch loss
+    return np.sqrt(total_loss/nb_batch) # Average total epoch loss and return rmse
 
 def test_epoch(model, data_loader, batch_size, loss_function, total_examples):
     total_loss, total_loss_csky, nb_batch = 0, 0, 0
@@ -60,7 +60,7 @@ def test_epoch(model, data_loader, batch_size, loss_function, total_examples):
         total_loss += loss_function(y_true=labels, y_pred=preds)
         total_loss_csky += loss_function(y_true=labels, y_pred=preds_csky)
         nb_batch += 1
-    return total_loss/nb_batch, total_loss_csky/nb_batch # Average total epoch loss
+    return np.sqrt(total_loss/nb_batch), np.sqrt(total_loss_csky/nb_batch) # Average total epoch loss and return rmse
 
 def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl', 
          image_size: int = 32,
@@ -141,21 +141,21 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     for epoch in range(epochs):
         train_loss = train_epoch(model, dataloader_train, batch_size, mse, optimizer, nb_train_examples)
         valid_loss, csky_valid_loss = test_epoch(model, dataloader_valid, batch_size, mse, nb_valid_examples)
-        if valid_loss.numpy() < best_valid_loss:
-            best_valid_loss = valid_loss.numpy()
+        if valid_loss < best_valid_loss:
+            best_valid_loss = valid_loss
             utils.save_model(model)
         
         # Logs
         logger.info(f'Epoch {epoch} - Train Loss : {train_loss:.4f}, Valid Loss : {valid_loss:.4f}')
-        losses['train'].append(train_loss.numpy())
-        losses['valid'].append(valid_loss.numpy())
+        losses['train'].append(train_loss)
+        losses['valid'].append(valid_loss)
         with train_summary_writer.as_default():
-            tf.summary.scalar('loss', train_loss.numpy(), step=epoch)
+            tf.summary.scalar('loss', train_loss, step=epoch)
         with test_summary_writer.as_default():
-            tf.summary.scalar('loss', valid_loss.numpy(), step=epoch)
+            tf.summary.scalar('loss', valid_loss, step=epoch)
             
     # Plot losses
-    plots.plot_loss(losses['train'], losses['valid'], csky_valid_loss.numpy())
+    plots.plot_loss(losses['train'], losses['valid'], csky_valid_loss)
     
 if __name__ == "__main__":
     fire.Fire(main)
