@@ -1,12 +1,12 @@
+
 import numpy as np
-import gzip
-import pickle
-import matplotlib.pyplot as plt
-import math
 import tensorflow as tf
-from tensorflow import keras,data
-from tensorflow.keras import layers,models,activations
-from model_utils import *
+# import logging as mylogging
+from tensorflow import keras
+from tensorflow.keras import layers, models, activations
+from models.cnn_gru.model_utils import *
+
+# logger = mylogging.getLogger('logger')
 
 class CNN(keras.Model):
     def __init__(self):
@@ -43,9 +43,9 @@ class Encoder(tf.keras.Model):
         return output,state
 
 
-class BahdanauAttention(tf.keras.layers.Layer):
+class Attention(tf.keras.layers.Layer):
     def __init__(self, units):
-        super(BahdanauAttention, self).__init__()
+        super(Attention, self).__init__()
         self.W1 = tf.keras.layers.Dense(units)
         self.W2 = tf.keras.layers.Dense(units)
         self.V = tf.keras.layers.Dense(1)
@@ -75,7 +75,7 @@ class BahdanauAttention(tf.keras.layers.Layer):
 
     
 class Decoder(tf.keras.Model):
-    def __init__(self,units,emb_dim,seq_len,Attention,atten_units):
+    def __init__(self,units,emb_dim,seq_len,atten_units):
         # atten_units are intermediate dims for attention. 
         super().__init__()
         self.embedding = tf.keras.layers.Embedding(seq_len,emb_dim)
@@ -99,8 +99,8 @@ class Decoder(tf.keras.Model):
         return tf.squeeze(output), state, atten_w
     
 
-class Full_Model(tf.keras.Model):
-    def __init__(self,CNN,Encoder,Decoder,Attention,emb_dim=5,seq_len=5,atten_units=25,final_rep=10):
+class CnnGru(tf.keras.Model):
+    def __init__(self, seq_len, emb_dim=4, atten_units=25, final_rep=1):
         """ Arguments
             CNN -> CNN Class
             Encoder -> Encoder Class
@@ -118,27 +118,37 @@ class Full_Model(tf.keras.Model):
         """
         super().__init__()
         self.cnn = CNN()
-        ip_dims = self.cnn.compute_output_shape((None,None,None,1))[-1]
+        ip_dims = self.cnn.compute_output_shape((None,None,None,5))[-1]
         self.encoder = Encoder(self.cnn,ip_dims)
-        self.decoder = Decoder(ip_dims,emb_dim,seq_len,Attention,atten_units)
+        self.decoder = Decoder(ip_dims,emb_dim,seq_len,atten_units)
         self.seq_len = seq_len
         self.fc = tf.keras.layers.Dense(final_rep)
-    def call(self,x,labels):
+        self.decoder_output_size = 4
+
+    def call(self, x):
+        # print(f'shape of x {x.shape}')
+        # Reshape the decoder input for the last batch
         bs = x.shape[0]
-        seq_input = tf.convert_to_tensor(np.tile(np.array([0,1,2,3,4]),(bs,1)))
-        enc_output,enc_hidden = self.encoder(x)
-        # enc_output -> bs,seq_len,units
-        # enc_hidden -> bs,units
-        dec_hidden = enc_hidden
+        decoder_input = tf.convert_to_tensor(np.tile(np.arange(self.decoder_output_size),(bs,1)))
+        # print(f'decoder_input shape : ', decoder_input.shape)
+        # enc_output -> bs, seq_len, units
+        # enc_hidden -> bs, units
+        encoder_output, encoder_hidden = self.encoder(x)
+        # print(f'encoder_output shape : ', encoder_output.shape)
+        
+        decoder_hidden = encoder_hidden
         final_op,all_atten = [],[]
-        for i in range(self.seq_len):
-            dec_output,dec_hidden,atten_w = self.decoder(seq_input[:,i],dec_hidden,enc_output)
-            # dec_output = bs,units
-            # dec_hiddem = bs,units
-            # atten_w = bs,seq_len,1
-            final_op.append(dec_output)
+        for i in range(self.decoder_output_size):
+            # dec_output shape == (bs, units)
+            # dec_hiddem shape == (bs, units)
+            # atten_w shape == (bs, seq_len, 1)
+            decoder_output,decoder_hidden,atten_w = self.decoder(decoder_input[:,i],decoder_hidden,encoder_output)
+            
+            final_op.append(decoder_output)
             all_atten.append(atten_w)
+
         final_op = tf.transpose(tf.convert_to_tensor(final_op),perm=(1,0,2))
         final_op = self.fc(final_op)
         all_atten = tf.transpose(tf.convert_to_tensor(all_atten),perm=(1,0,2,3))
-        return final_op,all_atten
+
+        return final_op

@@ -8,6 +8,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 from models import baselines
+from models.cnn_gru.cnn_gru import CnnGru
 from dataset.datasets import SolarIrradianceDataset
 from dataset.sequence_dataset import SequenceDataset
 from utils import preprocessing
@@ -44,7 +45,7 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
         
         # Tensorboard logging
         if nb_batch % BATCH_LOG_INTERVAL == 0: 
-            if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
+            if model.__class__.__name__ in ['Sunset3DModel', 'CnnGru']: # Temporary if to not break older models
                 with train_summary_writer.as_default():
                     tf.summary.image(f'Training data sample', np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch, max_outputs=5)
 
@@ -65,7 +66,7 @@ def test_epoch(model, data_loader, batch_size, loss_function, total_examples):
 def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl', 
          image_size: int = 32,
          model: str = 'dummy',
-         epochs: int = 10,
+         epochs: int = 20,
          optimizer: str = 'adam' ,
          lr: float = 1e-4 , 
          batch_size: int = 100,
@@ -106,6 +107,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         model = baselines.ConvDemModel(image_size)
     elif model == 'sunset3d':
         model = baselines.Sunset3DModel(seq_len)
+    elif model == 'cnngru':
+        model = CnnGru(seq_len)
     else:
         raise Exception(f'Model "{model}" not recognized.')
         
@@ -122,10 +125,10 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     else:
         raise Exception(f'Optimizer "{optimizer}" not recognized.')
     
-    if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
+    if model.__class__.__name__ in ['Sunset3DModel', 'CnnGru']: # Temporary if to not break older models
         # Create data loader
-        dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len)
-        dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len)
+        dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=30))
+        dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=30))
     else:# TODO : Remove this else when we don't need older models
         df = df.dropna()
         df = df.iloc[:int(len(df.index)*subset_perc)]
