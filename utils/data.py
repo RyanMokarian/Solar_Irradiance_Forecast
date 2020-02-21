@@ -95,9 +95,11 @@ class Metadata(object):
         Returns:
             tuple -- GHI, Clearsky GHI
         """
-        # if timestamp in self.df.index:
-        #     return self.df.loc[timestamp, station+'_GHI'], self.df.loc[timestamp, station+'_CLEARSKY_GHI']
-        ghis, csky_ghis = self.get_ghis(timestamp)
+        if timestamp in self.df.index:
+            return self.df.loc[timestamp, station+'_GHI'], self.df.loc[timestamp, station+'_CLEARSKY_GHI']
+        else:
+            return GHI_MEDIAN, GHI_MEDIAN
+        # ghis, csky_ghis = self.get_ghis(timestamp)
         return ghis[station], csky_ghis[station]
 
     def get_clearsky(self, timestamp: datetime, station: str):
