@@ -16,6 +16,8 @@ logger = logging.getLogger('logger')
 
 CROP_PROCESSES_NB = 4
 
+GHI_MEDIAN = 123.8
+
 stations = {'BND':(40.05192,-88.37309), 'TBL':(40.12498,-105.2368),
             'DRA':(36.62373,-116.01947), 'FPK':(48.30783,-105.1017),
             'GWN':(34.2547,-89.8729), 'PSU':(40.72012,-77.93085), 
@@ -38,6 +40,7 @@ class Metadata(object):
         self.col_offset = 'hdf5_8bit_offset' if eight_bits else 'hdf5_16bit_path'
         self.col_csky = [s+'_CLEARSKY_GHI' for s in stations.keys()]
         self.col_ghi = [s+'_GHI' for s in stations.keys()]
+        self.col_daytime = [s+'_DAYTIME' for s in stations.keys()]
 
     def ghis_exist(self, timestamp: datetime):
         """Checks if GHI values exist in the dataframe for a particular timestamp.
@@ -76,8 +79,8 @@ class Metadata(object):
             dict -- dict were keys are the station names and values are the GHIs.
         """
         if not self.ghis_exist(timestamp):
-            empty_values = dict(zip(stations.keys(), [0]*len(stations.keys())))
-            return empty_values, empty_values # TODO : Interpolate
+            median_values = dict(zip(stations.keys(), [GHI_MEDIAN]*len(stations.keys())))
+            return median_values, median_values
         ghis = dict(zip(stations.keys(), list(self.df.loc[timestamp, self.col_ghi])))
         csky_ghis = dict(zip(stations.keys(), list(self.df.loc[timestamp, self.col_csky])))
         return ghis, csky_ghis
@@ -92,8 +95,28 @@ class Metadata(object):
         Returns:
             tuple -- GHI, Clearsky GHI
         """
-        ghis, csky_ghis = self.get_ghis(timestamp)
+        if timestamp in self.df.index:
+            return self.df.loc[timestamp, station+'_GHI'], self.df.loc[timestamp, station+'_CLEARSKY_GHI']
+        else:
+            return GHI_MEDIAN, GHI_MEDIAN
+        # ghis, csky_ghis = self.get_ghis(timestamp)
         return ghis[station], csky_ghis[station]
+
+    def get_clearsky(self, timestamp: datetime, station: str):
+        """Gets the Clearsky GHI ONLY. This method is used in the evaluator dataset when
+        the labels are unavailable
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp of the requested Clearsky GHI.
+            station {str} -- The station of the requested Clearsky GHI.
+
+        Returns:
+            float -- Clearsky GHI
+        """
+        if timestamp in self.df.index and not self.df.loc[timestamp, self.col_csky].isna().any():
+            return self.df.loc[timestamp, station+'_CLEARSKY_GHI']
+        else:
+            return 0 # TODO : Replace that with median
 
     def get_path(self, timestamp: datetime):
         """Gets the path of the hdf5 file for a particular datetime.
@@ -202,6 +225,10 @@ class Metadata(object):
                 logger.error(f'Date format not recognised : {date}')
             
         return Metadata(self.df.loc[train_idx]), Metadata(self.df.loc[valid_idx])
+    
+    def get_number_of_examples(self):
+        """Gets the total amount of valid examples"""
+        return self.df.loc[self.get_timestamps(), self.col_daytime].values.sum()
 
     def __len__(self):
         return len(self.get_timestamps())

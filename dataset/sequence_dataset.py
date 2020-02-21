@@ -21,7 +21,7 @@ class SequenceDataset(tf.data.Dataset):
                                             output_shapes={'station_name': tf.TensorShape([]),
                                                            'images': tf.TensorShape([None, images.image_size, images.image_size, 5]),
                                                            'csky_ghi': tf.TensorShape([4]),
-                                                           'ghi': tf.TensorShape([4])}).prefetch(tf.data.experimental.AUTOTUNE).cache()
+                                                           'ghi': tf.TensorShape([4])}).prefetch(tf.data.experimental.AUTOTUNE)
 
 class DataGenerator(object):
     """

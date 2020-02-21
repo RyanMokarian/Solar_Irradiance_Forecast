@@ -45,7 +45,7 @@ class SunsetModel(tf.keras.Model):
         return x
 
 class Sunset3DModel(tf.keras.Model):
-    def __init__(self, seq_len):
+    def __init__(self):
         super(Sunset3DModel, self).__init__()
         self.conv1 = tf.keras.layers.Conv3D(12, (3, 3, 3), activation='relu', padding='same')
         self.conv2 = tf.keras.layers.Conv3D(24, (3, 3, 3), activation='relu', padding='same')
