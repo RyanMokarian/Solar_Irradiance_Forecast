@@ -16,6 +16,7 @@ from utils import plots
 from utils import logging
 from utils import data
 
+SEED = 1
 DATA_PATH = '/project/cq-training-1/project1/data/'
 HDF5_8BIT = 'hdf5v7_8bit'
 BATCH_LOG_INTERVAL = 50
@@ -71,7 +72,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          batch_size: int = 100,
          subset_perc: float = 1,
          saved_model_dir: str = None,
-         seq_len: int = 6
+         seq_len: int = 6,
+         seed: bool = True
         ):
     
     # Warning if no GPU detected
@@ -79,6 +81,11 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         logger.warning('No GPU detected, training will run on CPU.')
     elif len(tf.config.list_physical_devices('GPU')) > 1:
         logger.warning('Multiple GPUs detected, training will run on only one GPU.')
+
+    # Set random seed
+    if seed:
+        tf.random.set_seed(SEED)
+        np.random.seed(SEED)
 
     # Load dataframe
     logger.info('Loading and preprocessing dataframe...')
@@ -94,7 +101,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     # Split into train and valid
     metadata, _ = metadata.split(1-subset_perc)
     metadata_train, metadata_valid = metadata.split(VALID_PERC)
-    nb_train_examples, nb_valid_examples = len(metadata_train)*len(data.stations.keys()), len(metadata_valid)*len(data.stations.keys())
+    nb_train_examples, nb_valid_examples = metadata_train.get_number_of_examples(), metadata_valid.get_number_of_examples()
     logger.info(f'Number of training examples : {nb_train_examples}, number of validation examples : {nb_valid_examples}')
 
     # Create model
