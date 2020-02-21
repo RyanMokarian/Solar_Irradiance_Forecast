@@ -95,6 +95,22 @@ class Metadata(object):
         ghis, csky_ghis = self.get_ghis(timestamp)
         return ghis[station], csky_ghis[station]
 
+    def get_clearsky(self, timestamp: datetime, station: str):
+        """Gets the Clearsky GHI ONLY. This method is used in the evaluator dataset when
+        the labels are unavailable
+        
+        Arguments:
+            timestamp {datetime} -- The timestamp of the requested Clearsky GHI.
+            station {str} -- The station of the requested Clearsky GHI.
+
+        Returns:
+            float -- Clearsky GHI
+        """
+        if timestamp in self.df.index and not self.df.loc[timestamp, self.col_csky].isna().any():
+            return self.df.loc[timestamp, station+'_CLEARSKY_GHI']
+        else:
+            return 0 # TODO : Replace that with median
+
     def get_path(self, timestamp: datetime):
         """Gets the path of the hdf5 file for a particular datetime.
         
