@@ -56,7 +56,7 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
         train_mse_metric.update_state(y_true=labels, y_pred=preds)
         
         # Tensorboard logging
-        if nb_batch % BATCH_LOG_INTERVAL == 0: 
+        if i % BATCH_LOG_INTERVAL == 0: 
             if model.__class__.__name__ in ['Sunset3DModel', 'CnnGru', 'ConvLSTM']: # Temporary if to not break older models
                 with train_summary_writer.as_default():
                     tf.summary.image(f'Training data sample', np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=i, max_outputs=5)
@@ -88,7 +88,9 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          seq_len: int = 6,
          seed: bool = True,
          scale_label: bool = True,
-         use_csky: bool = False
+         use_csky: bool = False,
+         cache: bool = False, 
+         timesteps_minutes: int = 15
         ):
     
     # Warning if no GPU detected
@@ -150,8 +152,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     
     if model.__class__.__name__ in ['Sunset3DModel', 'CnnGru', 'ConvLSTM']: # Temporary if to not break older models
         # Create data loader
-        dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=30))
-        dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=30))
+        dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
+        dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
     else:# TODO : Remove this else when we don't need older models
         df = df.dropna()
         df = df.iloc[:int(len(df.index)*subset_perc)]

@@ -12,8 +12,8 @@ class SequenceDataset(tf.data.Dataset):
     """
     Dataset that loads satellite imagery from pickle files.
     """    
-    def __new__(cls, metadata: data.Metadata, images: data.Images, seq_len: int, timesteps: typing.Union[list, timedelta] = timedelta(minutes=15)):
-        return tf.data.Dataset.from_generator(DataGenerator(metadata, images, seq_len, timesteps).get_next_example,
+    def __new__(cls, metadata: data.Metadata, images: data.Images, seq_len: int, timesteps: typing.Union[list, timedelta] = timedelta(minutes=15), cache: bool = False):
+        dataset = tf.data.Dataset.from_generator(DataGenerator(metadata, images, seq_len, timesteps).get_next_example,
                                             output_types={'station_name': tf.string,
                                                           'images': tf.float32,
                                                           'csky_ghi': tf.float32,
@@ -22,6 +22,10 @@ class SequenceDataset(tf.data.Dataset):
                                                            'images': tf.TensorShape([None, images.image_size, images.image_size, 5]),
                                                            'csky_ghi': tf.TensorShape([4]),
                                                            'ghi': tf.TensorShape([4])}).prefetch(tf.data.experimental.AUTOTUNE)
+        if cache:
+            return dataset.cache()
+        else:
+            return dataset
 
 class DataGenerator(object):
     """
