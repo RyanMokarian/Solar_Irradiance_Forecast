@@ -23,8 +23,6 @@ class IdentityBlock(tf.keras.Model):
         x +=  input
         return tf.nn.relu(x)
 
-
-
 class ConvBlock(tf.keras.Model):
     def __init__(self,filters):
         super().__init__()

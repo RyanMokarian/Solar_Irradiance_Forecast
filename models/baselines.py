@@ -1,14 +1,15 @@
 import tensorflow as tf
 from numpy import moveaxis
 from numpy import asarray
+from tensorflow.keras import layers
 
 
 class DummyModel(tf.keras.Model):
     def __init__(self):
         super(DummyModel, self).__init__()
-        self.flatten = tf.keras.layers.Flatten()
-        self.dense1 = tf.keras.layers.Dense(32, activation=tf.nn.relu)
-        self.dense2 = tf.keras.layers.Dense(1, activation=None)
+        self.flatten = layers.Flatten()
+        self.dense1 = layers.Dense(32, activation=tf.nn.relu)
+        self.dense2 = layers.Dense(1, activation=None)
         
     def call(self, inputs):
         x = self.dense1(self.flatten(inputs))
@@ -17,19 +18,20 @@ class DummyModel(tf.keras.Model):
 class SunsetModel(tf.keras.Model):
     def __init__(self):
         super(SunsetModel, self).__init__()
-        self.conv1 = tf.keras.layers.Conv2D(12, (3, 3), activation='relu', padding='same')
-        self.conv2 = tf.keras.layers.Conv2D(24, (3, 3), activation='relu', padding='same')
-        self.batch_norm1 = tf.keras.layers.BatchNormalization()
-        self.batch_norm2 = tf.keras.layers.BatchNormalization()
-        self.maxpooling = tf.keras.layers.MaxPool2D(pool_size=(2, 2))
-        self.flatten = tf.keras.layers.Flatten()
-        self.dense1 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
-        self.dense2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
-        self.dense3 = tf.keras.layers.Dense(1, activation=None)
+        self.conv1 = layers.Conv2D(12, (3, 3), activation='relu', padding='same')
+        self.conv2 = layers.Conv2D(24, (3, 3), activation='relu', padding='same')
+        self.batch_norm = layers.BatchNormalization()
+        self.maxpooling = layers.MaxPool2D(pool_size=(2, 2))
+        self.flatten = layers.Flatten()
+        self.dense1 = layers.Dense(1024, activation=tf.nn.relu)
+        self.dense2 = layers.Dense(1024, activation=tf.nn.relu)
+        self.dense3 = layers.Dense(1, activation=None)
 
-    def call(self, inputs,training=False):
+    def call(self, inputs, training=False):
+        x = inputs[:,-1,:,:,:] # Only consider T0
+
         # Conv block 1
-        x = self.conv1(inputs)
+        x = self.conv1(x)
         #x = self.batch_norm1(x,training=training)
         x = self.maxpooling(x)
         
@@ -43,21 +45,23 @@ class SunsetModel(tf.keras.Model):
         x = self.dense1(x)
         x = self.dense2(x)
         x = self.dense3(x)
-        return x
+
+        return tf.tile(input=x, multiples=tf.constant([1, 4])) # Return same prediction for T0, T+1, T+3 and T+6
 
 class Sunset3DModel(tf.keras.Model):
     def __init__(self):
         super(Sunset3DModel, self).__init__()
-        self.conv1 = tf.keras.layers.Conv3D(12, (3, 3, 3), activation='relu', padding='same')
-        self.conv2 = tf.keras.layers.Conv3D(24, (3, 3, 3), activation='relu', padding='same')
-        self.maxpooling = tf.keras.layers.MaxPool3D(pool_size=(2, 2, 2))
-        self.flatten = tf.keras.layers.Flatten()
-        self.dense1 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
-        self.dense2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
-        self.dense3 = tf.keras.layers.Dense(4, activation=None)
+        self.conv1 = layers.Conv3D(12, (3, 3, 3), activation='relu', padding='same')
+        self.conv2 = layers.Conv3D(24, (3, 3, 3), activation='relu', padding='same')
+        self.maxpooling = layers.MaxPool3D(pool_size=(2, 2, 2))
+        self.flatten = layers.Flatten()
+        self.dense1 = layers.Dense(1024, activation=tf.nn.relu)
+        self.dense2 = layers.Dense(1024, activation=tf.nn.relu)
+        self.dense3 = layers.Dense(4, activation=None)
 
     def call(self, inputs):
-         # Conv block 1
+    
+        # Conv block 1
         x = self.conv1(inputs)
         #x = self.batch_norm(x)
         x = self.maxpooling(x)
@@ -77,13 +81,13 @@ class Sunset3DModel(tf.keras.Model):
 class ConvDemModel(tf.keras.Model):
     def __init__(self):
         super(ConvDemModel, self).__init__()
-        self.conv1 = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')
-        self.conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same')
-        self.conv3 = tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same')
-        self.maxpooling = tf.keras.layers.MaxPool2D(pool_size=(2, 2))
-        self.flatten = tf.keras.layers.Flatten()
-        self.droppedout = tf.keras.layers.Dropout(0.2)
-        self.dense = tf.keras.layers.Dense(1, activation=None)
+        self.conv1 = layers.Conv2D(32, (3, 3), activation='relu', padding='same')
+        self.conv2 = layers.Conv2D(64, (3, 3), activation='relu', padding='same')
+        self.conv3 = layers.Conv2D(64, (3, 3), activation='relu', padding='same')
+        self.maxpooling = layers.MaxPool2D(pool_size=(2, 2))
+        self.flatten = layers.Flatten()
+        self.droppedout = layers.Dropout(0.2)
+        self.dense = layers.Dense(1, activation=None)
 
     def call(self, inputs):
         # Conv block 1:        
@@ -107,3 +111,33 @@ class ConvDemModel(tf.keras.Model):
         x = self.dense(x)
 
         return x
+
+class ConvLSTM(tf.keras.Model):
+    def __init__(self):
+        super(ConvLSTM, self).__init__()
+        self.average_pool = layers.TimeDistributed(layers.AveragePooling2D(pool_size=(4, 4)))
+        self.conv1 = layers.ConvLSTM2D(128, (5, 5), return_sequences = True)
+        self.conv2 = layers.ConvLSTM2D(64, (5, 5), return_sequences = True)
+        self.conv3 = layers.ConvLSTM2D(64, (5, 5))
+        self.flatten = layers.Flatten()
+        self.dense1 = layers.Dense(1024, activation=tf.nn.relu)
+        self.dense2 = layers.Dense(1024, activation=tf.nn.relu)
+        self.dense3 = layers.Dense(4, activation=None)
+    
+    def call(self, inputs):
+        # print('intput shape : ', inputs.shape)
+        x = self.average_pool(inputs)
+        # print('after avg pooling : ', x.shape)
+        x = self.conv1(inputs)
+        # print('after conv1 : ', x.shape)
+        x = self.conv2(x)
+        #print('after conv2 : ', x.shape)
+        x = self.conv3(x)
+        #print('after conv23 : ', x.shape)
+        x = self.flatten(x)
+        #print('after flatten : ', x.shape)
+        x = self.dense1(x)
+        x = self.dense2(x)
+        x = self.dense3(x)
+        return x
+

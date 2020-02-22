@@ -58,9 +58,8 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
         
         # Tensorboard logging
         if i % BATCH_LOG_INTERVAL == 0: 
-            if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
-                with train_summary_writer.as_default():
-                    tf.summary.image(f'Training data sample', np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=i, max_outputs=5)
+            with train_summary_writer.as_default():
+                tf.summary.image(f'Training data sample', np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=i, max_outputs=5)
 
 def test_epoch(model, data_loader, batch_size, loss_function, total_examples, scale_label, use_csky):
     valid_mse_metric.reset_states()
@@ -89,7 +88,9 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          seq_len: int = 6,
          seed: bool = True,
          scale_label: bool = True,
-         use_csky: bool = False
+         use_csky: bool = False,
+         cache: bool = False, 
+         timesteps_minutes: int = 15
         ):
     
     # Warning if no GPU detected
@@ -129,6 +130,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         model = baselines.ConvDemModel(image_size)
     elif model == 'sunset3d':
         model = baselines.Sunset3DModel()
+    elif model == 'convlstm':
+        model = baselines.ConvLSTM()
     elif model == 'cnngru':
         model = CnnGru(seq_len)
     elif model == 'cnnlstm':
@@ -149,17 +152,9 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     else:
         raise Exception(f'Optimizer "{optimizer}" not recognized.')
     
-    if model.__class__.__name__ in ['Sunset3DModel', 'CnnGru','LSTM_Resnet']: # Temporary if to not break older models
-        # Create data loader
-        dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=30))
-        dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=30))
-    else:# TODO : Remove this else when we don't need older models
-        df = df.dropna()
-        df = df.iloc[:int(len(df.index)*subset_perc)]
-        cutoff = int(len(df.index)*(1-VALID_PERC))
-        df_train, df_valid = df.iloc[:cutoff], df.iloc[cutoff:]
-        dataloader_train = SolarIrradianceDataset(df_train, image_size)
-        dataloader_valid = SolarIrradianceDataset(df_valid, image_size)
+    # Create data loader
+    dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
+    dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
     
     # Training loop
     logger.info('Training...')
