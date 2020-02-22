@@ -19,22 +19,23 @@ class SunsetModel(tf.keras.Model):
         super(SunsetModel, self).__init__()
         self.conv1 = tf.keras.layers.Conv2D(12, (3, 3), activation='relu', padding='same')
         self.conv2 = tf.keras.layers.Conv2D(24, (3, 3), activation='relu', padding='same')
-        self.batch_norm = tf.keras.layers.BatchNormalization()
+        self.batch_norm1 = tf.keras.layers.BatchNormalization()
+        self.batch_norm2 = tf.keras.layers.BatchNormalization()
         self.maxpooling = tf.keras.layers.MaxPool2D(pool_size=(2, 2))
         self.flatten = tf.keras.layers.Flatten()
         self.dense1 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
         self.dense2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)
         self.dense3 = tf.keras.layers.Dense(1, activation=None)
 
-    def call(self, inputs):
+    def call(self, inputs,training=False):
         # Conv block 1
         x = self.conv1(inputs)
-        #x = self.batch_norm(x)
+        #x = self.batch_norm1(x,training=training)
         x = self.maxpooling(x)
         
         # Conv block 2
         x = self.conv2(x)
-        #x = self.batch_norm(x)
+        #x = self.batch_norm2(x,training=training)
         x = self.maxpooling(x)
         
         # Fully connected
@@ -74,7 +75,7 @@ class Sunset3DModel(tf.keras.Model):
         return x
     
 class ConvDemModel(tf.keras.Model):
-    def __init__(self, image_size):
+    def __init__(self):
         super(ConvDemModel, self).__init__()
         self.conv1 = tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same')
         self.conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same')

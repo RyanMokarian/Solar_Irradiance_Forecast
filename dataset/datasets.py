@@ -39,7 +39,7 @@ class SolarIrradianceDataset(tf.data.Dataset):
                                                         'station_long': tf.TensorShape([]),
                                                         'images': tf.TensorShape([image_size, image_size, 5]),
                                                         'csky_ghi': tf.TensorShape([]),
-                                                        'ghi': tf.TensorShape([])}).prefetch(tf.data.experimental.AUTOTUNE).cache()
+                                                        'ghi': tf.TensorShape([])})
 
 class DataGenerator(object):
     """

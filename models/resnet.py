@@ -46,8 +46,6 @@ class ConvBlock(tf.keras.Model):
         x += shortcut
         return tf.nn.relu(x)
 
-
-
 class StraightBlock(tf.keras.Model):
     def __init__(self,filters):
         super().__init__()
@@ -61,40 +59,44 @@ class StraightBlock(tf.keras.Model):
         x = self.maxpool(x)
         return x
 
+class BottleNeck(tf.keras.Model):
+    def __init__(self):
+        super().__init__()
+        self.conv = layers.Conv2D(256,1)
+        self.bn1 = layers.BatchNormalization()
+        self.flatten  = layers.Flatten()
+        self.globalmaxpool = layers.GlobalMaxPool2D()
+        self.globalavgpool = layers.GlobalAveragePooling2D()
+        self.fc = layers.Dense(256)
+    def call(self,input,training=False):
+        x = self.conv(input)
+        x = self.bn1(x,training=training)
+        x = tf.nn.relu(x)
+        y = self.globalmaxpool(x)
+        y = self.flatten(y)
+        z = self.globalavgpool(x)
+        z = self.flatten(z)
+        x = tf.concat([y,z],axis=-1)
+        x  = self.fc(x)
+        return x
 
 class CustomResNet(tf.keras.Model):
     def __init__(self):
         super().__init__()
         self.first = StraightBlock(100)
         self.second = StraightBlock(200)
-        self.identity1 = IdentityBlock(100)
-        self.identity11 = IdentityBlock(100) 
+        self.third = StraightBlock(400)
+        self.identity1 = IdentityBlock(100)        
         self.identity2 = IdentityBlock(200)
-        self.identity22  = IdentityBlock(200)
-        self.identity3 = IdentityBlock(300)
-        self.identity4 = IdentityBlock(400)
-        self.maxpool = layers.MaxPool2D(2,2)        
-        self.conv1 = ConvBlock(200)
-        self.conv2 = ConvBlock(300)
-        self.globalmaxpool = layers.GlobalMaxPool2D()
-        self.globalavgpool = layers.GlobalAveragePooling2D()
-        self.flatten  = layers.Flatten()
+        self.identity3 = IdentityBlock(400)
+        self.bottleneck  = BottleNeck()  
+        
     def call(self,input,training=False):
         x = self.first(input,training=training)
         x = self.identity1(x,training=training)
-        x = self.identity11(x,training=training)
-        #x = self.maxpool(x)
-        #x = self.conv1(x,training=training)
-        x = self.second(x,training=True)
+        x = self.second(x,training=training)
         x = self.identity2(x,training=training)
-        x = self.identity22(x,training=training)
-        #x = self.maxpool(x)
-        x = self.conv2(x,training=training)
+        x = self.third(x,training=training)
         x = self.identity3(x,training=training)
-        #print(x.shape)
-        y = self.globalmaxpool(x)
-        y = self.flatten(y)
-        z = self.globalavgpool(x)
-        z = self.flatten(z)
-        x = tf.concat([y,z],axis=-1)
+        x = self.bottleneck(x,training=training)
         return x

@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, models, activations
-from models.cnn_gru.model_utils import *
+from models.resnet import CustomResNet
 
 
 class CNN(keras.Model):
@@ -82,7 +82,7 @@ class Decoder(tf.keras.Model):
         # atten_w -> bs,seq_len,1
         x = tf.concat([context,x],axis=-1)
         # x -> bs,emb_dim + units
-        output,hidden,state = self.lstm(x)#,initial_state=[hidden,cell_state])
+        output,hidden,state = self.lstm(x,initial_state=[hidden,cell_state])
         # output -> bs,1,units
         # state -> bs,units
         return tf.squeeze(output), hidden, state, atten_w
@@ -90,7 +90,7 @@ class Decoder(tf.keras.Model):
 
 
 class LSTM_Resnet(tf.keras.Model):
-    def __init__(self,emb_dim=5,seq_len=5,atten_units=25,final_rep=10):
+    def __init__(self,seq_len,emb_dim=4,atten_units=50,final_rep=1):
         """ Arguments
             emb_dim -> embedding dimension at decoder
             seq_len -> sequence length
@@ -103,24 +103,25 @@ class LSTM_Resnet(tf.keras.Model):
 
         """
         super().__init__()
-        ip_dims = CNN().compute_output_shape((None,None,None,5))[-1]
-        self.cnn = TimeDistributed(CNN())
+        ip_dims = CustomResNet().compute_output_shape((None,None,None,5))[-1]
+        self.cnn = layers.TimeDistributed(CustomResNet())
         self.encoder = Encoder(ip_dims)
         self.decoder = Decoder(ip_dims,emb_dim,seq_len,atten_units)
         self.seq_len = seq_len
         self.fc = tf.keras.layers.Dense(final_rep)
-    def call(self,x,labels):
+        self.decoder_ouput_size = 4
+    def call(self,x):
         bs = x.shape[0]
-        seq_input = tf.convert_to_tensor(np.tile(np.array([0,1,2,3,4]),(bs,1)))
+        decoder_input = tf.convert_to_tensor(np.tile(np.arange(self.decoder_ouput_size),(bs,1)))
         x = self.cnn(x)
         enc_output,enc_hidden,enc_cell_state,_,_ = self.encoder(x)
         # enc_output -> bs,seq_len,units
         # enc_hidden -> bs,units
         dec_hidden, dec_cell_state = enc_hidden, enc_cell_state
         final_op,all_atten = [],[]
-        for i in range(self.seq_len):
+        for i in range(self.decoder_ouput_size):
             dec_output, dec_hidden, dec_cell_state, atten_w =  \
-            self.decoder(seq_input[:,i],dec_hidden,dec_cell_state,enc_output)
+            self.decoder(decoder_input[:,i],dec_hidden,dec_cell_state,enc_output)
             # dec_output = bs,units
             # dec_hiddem = bs,units
             # atten_w = bs,seq_len,1
@@ -129,4 +130,4 @@ class LSTM_Resnet(tf.keras.Model):
         final_op = tf.transpose(tf.convert_to_tensor(final_op),perm=(1,0,2))
         final_op = self.fc(final_op)
         all_atten = tf.transpose(tf.convert_to_tensor(all_atten),perm=(1,0,2,3))
-        return final_op,all_atten
+        return final_op
