@@ -35,13 +35,13 @@ logger = logging.get_logger()
 def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_examples):
     total_loss, nb_batch = 0, 0
     for batch in tqdm(data_loader.batch(batch_size), total=(np.ceil(total_examples/batch_size)), desc='train epoch', leave=False):
-        images, labels = batch['images'], batch['ghi']
+        images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
         with tf.GradientTape() as tape:
             preds = model(images)
-            loss = loss_function(y_true=labels, y_pred=preds)
+            loss = loss_function(y_true=(labels-csky), y_pred=preds)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
-        total_loss += loss
+        total_loss += loss_function(y_true=labels, y_pred=preds+csky)
         
         # Tensorboard logging
         if nb_batch % BATCH_LOG_INTERVAL == 0: 
@@ -56,10 +56,10 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
 def test_epoch(model, data_loader, batch_size, loss_function, total_examples):
     total_loss, total_loss_csky, nb_batch = 0, 0, 0
     for batch in tqdm(data_loader.batch(batch_size), total=(np.ceil(total_examples/batch_size)), desc='valid epoch', leave=False):
-        images, labels, preds_csky = batch['images'], batch['ghi'], batch['csky_ghi']
+        images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
         preds = model(images)
-        total_loss += loss_function(y_true=labels, y_pred=preds)
-        total_loss_csky += loss_function(y_true=labels, y_pred=preds_csky)
+        total_loss += loss_function(y_true=labels, y_pred=preds+csky)
+        total_loss_csky += loss_function(y_true=labels, y_pred=csky)
         nb_batch += 1
     return np.sqrt(total_loss/nb_batch), np.sqrt(total_loss_csky/nb_batch) # Average total epoch loss and return rmse
 
