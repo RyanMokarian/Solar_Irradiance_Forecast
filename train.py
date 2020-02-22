@@ -41,7 +41,7 @@ valid_csky_mse_metric = tf.keras.metrics.MeanSquaredError()
 
 def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_examples, scale_label, use_csky):
     train_mse_metric.reset_states()
-    for i, batch in tqdm(enumerate(data_loader.batch(batch_size)), total=(np.ceil(total_examples/batch_size)), desc='train epoch', leave=False):
+    for i, batch in tqdm(enumerate(data_loader), total=(np.ceil(total_examples/batch_size)), desc='train epoch', leave=False):
         images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
         with tf.GradientTape() as tape:
             preds = model(images)
@@ -65,7 +65,7 @@ def test_epoch(model, data_loader, batch_size, loss_function, total_examples, sc
     valid_mse_metric.reset_states()
     valid_csky_mse_metric.reset_states()
 
-    for batch in tqdm(data_loader.batch(batch_size), total=(np.ceil(total_examples/batch_size)), desc='valid epoch', leave=False):
+    for batch in tqdm(data_loader, total=(np.ceil(total_examples/batch_size)), desc='valid epoch', leave=False):
         images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
         preds = model(images)
         if use_csky:
@@ -153,8 +153,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         raise Exception(f'Optimizer "{optimizer}" not recognized.')
     
     # Create data loader
-    dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
-    dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
+    dataloader_train = SequenceDataset(metadata_train, images, seq_len, batch_size, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
+    dataloader_valid = SequenceDataset(metadata_valid, images, seq_len, batch_size, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
     
     # Training loop
     logger.info('Training...')
