@@ -27,9 +27,11 @@ class SunsetModel(tf.keras.Model):
         self.dense2 = layers.Dense(1024, activation=tf.nn.relu)
         self.dense3 = layers.Dense(1, activation=None)
 
-    def call(self, inputs,training=False):
+    def call(self, inputs, training=False):
+        x = inputs[:,-1,:,:,:] # Only consider T0
+
         # Conv block 1
-        x = self.conv1(inputs)
+        x = self.conv1(x)
         #x = self.batch_norm1(x,training=training)
         x = self.maxpooling(x)
         
@@ -43,7 +45,8 @@ class SunsetModel(tf.keras.Model):
         x = self.dense1(x)
         x = self.dense2(x)
         x = self.dense3(x)
-        return x
+
+        return tf.tile(input=x, multiples=tf.constant([1, 4])) # Return same prediction for T0, T+1, T+3 and T+6
 
 class Sunset3DModel(tf.keras.Model):
     def __init__(self):
@@ -57,7 +60,8 @@ class Sunset3DModel(tf.keras.Model):
         self.dense3 = layers.Dense(4, activation=None)
 
     def call(self, inputs):
-         # Conv block 1
+    
+        # Conv block 1
         x = self.conv1(inputs)
         #x = self.batch_norm(x)
         x = self.maxpooling(x)
