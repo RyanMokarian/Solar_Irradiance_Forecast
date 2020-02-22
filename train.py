@@ -34,36 +34,48 @@ test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
 logger = logging.get_logger()
 
-def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_examples):
-    total_loss, nb_batch = 0, 0
-    for batch in tqdm(data_loader.batch(batch_size), total=(np.ceil(total_examples/batch_size)), desc='train epoch', leave=False):
-        images, labels = batch['images'], batch['ghi']
+# Metrics
+train_mse_metric = tf.keras.metrics.MeanSquaredError()
+valid_mse_metric = tf.keras.metrics.MeanSquaredError()
+valid_csky_mse_metric = tf.keras.metrics.MeanSquaredError()
+
+def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_examples, scale_label, use_csky):
+    train_mse_metric.reset_states()
+    for i, batch in tqdm(enumerate(data_loader.batch(batch_size)), total=(np.ceil(total_examples/batch_size)), desc='train epoch', leave=False):
+        images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
         with tf.GradientTape() as tape:
             preds = model(images)
+            if use_csky:
+                preds = preds + csky
             loss = loss_function(y_true=labels, y_pred=preds)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
-        total_loss += loss
+
+        if scale_label:
+            preds, labels = preprocessing.unnormalize_ghi(preds), preprocessing.unnormalize_ghi(labels)
+
+        train_mse_metric.update_state(y_true=labels, y_pred=preds)
         
         # Tensorboard logging
-        if nb_batch % BATCH_LOG_INTERVAL == 0: 
-            if model.__class__.__name__ in ['Sunset3DModel', 'CnnGru']: # Temporary if to not break older models
+        if i % BATCH_LOG_INTERVAL == 0: 
+            if model.__class__.__name__ in ['Sunset3DModel']: # Temporary if to not break older models
                 with train_summary_writer.as_default():
-                    tf.summary.image(f'Training data sample', np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=nb_batch, max_outputs=5)
+                    tf.summary.image(f'Training data sample', np.moveaxis(images[0,-1,:,:,:, np.newaxis], -2, 0), step=i, max_outputs=5)
 
-        nb_batch += 1
+def test_epoch(model, data_loader, batch_size, loss_function, total_examples, scale_label, use_csky):
+    valid_mse_metric.reset_states()
+    valid_csky_mse_metric.reset_states()
 
-    return np.sqrt(total_loss/nb_batch) # Average total epoch loss and return rmse
-
-def test_epoch(model, data_loader, batch_size, loss_function, total_examples):
-    total_loss, total_loss_csky, nb_batch = 0, 0, 0
     for batch in tqdm(data_loader.batch(batch_size), total=(np.ceil(total_examples/batch_size)), desc='valid epoch', leave=False):
-        images, labels, preds_csky = batch['images'], batch['ghi'], batch['csky_ghi']
+        images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
         preds = model(images)
-        total_loss += loss_function(y_true=labels, y_pred=preds)
-        total_loss_csky += loss_function(y_true=labels, y_pred=preds_csky)
-        nb_batch += 1
-    return np.sqrt(total_loss/nb_batch), np.sqrt(total_loss_csky/nb_batch) # Average total epoch loss and return rmse
+        if use_csky:
+            preds = preds + csky
+        if scale_label:
+            preds, labels, csky = preprocessing.unnormalize_ghi(preds), preprocessing.unnormalize_ghi(labels), preprocessing.unnormalize_ghi(csky)
+        
+        valid_mse_metric.update_state(y_true=labels, y_pred=preds)
+        valid_csky_mse_metric.update_state(y_true=labels, y_pred=csky)
 
 def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.public.20100101-20160101.pkl', 
          image_size: int = 32,
@@ -75,7 +87,9 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          subset_perc: float = 1,
          saved_model_dir: str = None,
          seq_len: int = 6,
-         seed: bool = True
+         seed: bool = True,
+         scale_label: bool = True,
+         use_csky: bool = False
         ):
     
     # Warning if no GPU detected
@@ -92,8 +106,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     # Load dataframe
     logger.info('Loading and preprocessing dataframe...')
     df = pd.read_pickle(df_path)
-    df = preprocessing.preprocess(df, shuffle=False, scale_label=False)
-    metadata = data.Metadata(df)
+    df = preprocessing.preprocess(df, shuffle=False, scale_label=scale_label)
+    metadata = data.Metadata(df, scale_label)
 
     # Pre-crop data
     logger.info('Getting crops...')
@@ -152,14 +166,18 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     losses = {'train' : [], 'valid' : []}
     best_valid_loss = float('inf')
     for epoch in range(epochs):
-        train_loss = train_epoch(model, dataloader_train, batch_size, mse, optimizer, nb_train_examples)
-        valid_loss, csky_valid_loss = test_epoch(model, dataloader_valid, batch_size, mse, nb_valid_examples)
+        train_epoch(model, dataloader_train, batch_size, mse, optimizer, nb_train_examples, scale_label, use_csky)
+        test_epoch(model, dataloader_valid, batch_size, mse, nb_valid_examples, scale_label, use_csky)
+        train_loss = np.sqrt(train_mse_metric.result().numpy())
+        valid_loss = np.sqrt(valid_mse_metric.result().numpy())
+        csky_valid_loss = np.sqrt(valid_csky_mse_metric.result().numpy())
+
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
             utils.save_model(model)
         
         # Logs
-        logger.info(f'Epoch {epoch} - Train Loss : {train_loss:.4f}, Valid Loss : {valid_loss:.4f}')
+        logger.info(f'Epoch {epoch} - Train Loss : {train_loss:.4f}, Valid Loss : {valid_loss:.4f}, Csky Valid Loss : {csky_valid_loss:.4f}' )
         losses['train'].append(train_loss)
         losses['valid'].append(valid_loss)
         with train_summary_writer.as_default():

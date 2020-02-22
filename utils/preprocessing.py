@@ -4,6 +4,8 @@ import pandas as pd
 import pickle
 import random
 
+from utils import data
+
 def preprocess(df: pd.DataFrame, shuffle: bool = True, scale_label: bool = True):
     """Apply preprocessing steps on the pandas dataframe.
     
@@ -30,11 +32,8 @@ def normalize_ghi(df: pd.DataFrame):
     Returns:
         pd.DataFrame -- Dataframe with standardized GHI values
     """
-    df_observed_ghi = df.filter(regex=("^..._GHI")) # Select only observed GHI columns
-    mean = df_observed_ghi.stack().mean()
-    std = df_observed_ghi.stack().std()
     df_ghi = df.filter(regex=("_GHI")) # Select all GHI columns
-    normalized_df=(df_ghi-mean)/std
+    normalized_df=(df_ghi-data.GHI_MEAN)/data.GHI_STD
 
     pd.options.mode.chained_assignment = None # Disable chained_assignment warning for the update operation
     df.update(normalized_df) # Replace normalized columns in the original dataframe
@@ -43,6 +42,18 @@ def normalize_ghi(df: pd.DataFrame):
     # TODO : Save mean and std to inverse normalization of predictions later
     
     return df
+
+def unnormalize_ghi(ghis: np.ndarray):
+    """Unstandardize the GHI values using the mean and standard deviation
+    of the observed GHI values.
+    
+    Arguments:
+        ghis {np.ndarray} -- Array of GHI values to unstandardize.
+    
+    Returns:
+        np.ndarray -- Array of GHI values with unstandardized GHI values
+    """
+    return ghis * data.GHI_STD + data.GHI_MEAN
 
 def shuffle_df(df: pd.DataFrame):
     """Shuffle the dataframe while keeping days together

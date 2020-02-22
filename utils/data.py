@@ -16,7 +16,9 @@ logger = logging.getLogger('logger')
 
 CROP_PROCESSES_NB = 4
 
-GHI_MEDIAN = 123.8
+GHI_MEDIAN = 291.1266666666796
+GHI_MEAN = 357.8474970021783
+GHI_STD = 293.66987323582606
 
 stations = {'BND':(40.05192,-88.37309), 'TBL':(40.12498,-105.2368),
             'DRA':(36.62373,-116.01947), 'FPK':(48.30783,-105.1017),
@@ -34,13 +36,15 @@ images_std = {'ch1': 0.30688239459685107, 'ch2': 60.6773046722939,
 class Metadata(object):
     """Wrapper class to handle metadata dataframe."""
 
-    def __init__(self, df, eight_bits=True):
+    def __init__(self, df, scale_label, eight_bits=True):
         self.df = df
         self.col_path = 'hdf5_8bit_path' if eight_bits else 'hdf5_16bit_path'
         self.col_offset = 'hdf5_8bit_offset' if eight_bits else 'hdf5_16bit_path'
         self.col_csky = [s+'_CLEARSKY_GHI' for s in stations.keys()]
         self.col_ghi = [s+'_GHI' for s in stations.keys()]
         self.col_daytime = [s+'_DAYTIME' for s in stations.keys()]
+        self.scale_label = scale_label
+        self.ghi_median = (GHI_MEDIAN-GHI_MEAN)/GHI_STD if self.scale_label else GHI_MEDIAN
 
     def ghis_exist(self, timestamp: datetime):
         """Checks if GHI values exist in the dataframe for a particular timestamp.
@@ -79,7 +83,8 @@ class Metadata(object):
             dict -- dict were keys are the station names and values are the GHIs.
         """
         if not self.ghis_exist(timestamp):
-            median_values = dict(zip(stations.keys(), [GHI_MEDIAN]*len(stations.keys())))
+            
+            median_values = dict(zip(stations.keys(), [self.ghi_median]*len(stations.keys())))
             return median_values, median_values
         ghis = dict(zip(stations.keys(), list(self.df.loc[timestamp, self.col_ghi])))
         csky_ghis = dict(zip(stations.keys(), list(self.df.loc[timestamp, self.col_csky])))
@@ -98,9 +103,7 @@ class Metadata(object):
         if timestamp in self.df.index:
             return self.df.loc[timestamp, station+'_GHI'], self.df.loc[timestamp, station+'_CLEARSKY_GHI']
         else:
-            return GHI_MEDIAN, GHI_MEDIAN
-        # ghis, csky_ghis = self.get_ghis(timestamp)
-        return ghis[station], csky_ghis[station]
+            return self.ghi_median, self.ghi_median
 
     def get_clearsky(self, timestamp: datetime, station: str):
         """Gets the Clearsky GHI ONLY. This method is used in the evaluator dataset when
@@ -116,7 +119,7 @@ class Metadata(object):
         if timestamp in self.df.index and not self.df.loc[timestamp, self.col_csky].isna().any():
             return self.df.loc[timestamp, station+'_CLEARSKY_GHI']
         else:
-            return 0 # TODO : Replace that with median
+            return self.ghi_median
 
     def get_path(self, timestamp: datetime):
         """Gets the path of the hdf5 file for a particular datetime.
@@ -195,7 +198,7 @@ class Metadata(object):
         """
         index = self.get_timestamps()
         cutoff = int(len(index)*(1-valid_perc))
-        return Metadata(self.df.loc[index[:cutoff]]), Metadata(self.df.loc[index[cutoff:]])
+        return Metadata(self.df.loc[index[:cutoff]], self.scale_label), Metadata(self.df.loc[index[cutoff:]], self.scale_label)
 
     def split_with_dates(self, dates: list = ['2013-01','2014-06','2012-08','2011-03','2010-10']):
         """Splits the data into a training and validation set. Uses the dates in the validation set.
@@ -224,7 +227,7 @@ class Metadata(object):
             else:
                 logger.error(f'Date format not recognised : {date}')
             
-        return Metadata(self.df.loc[train_idx]), Metadata(self.df.loc[valid_idx])
+        return Metadata(self.df.loc[train_idx], self.scale_label), Metadata(self.df.loc[valid_idx], self.scale_label)
     
     def get_number_of_examples(self):
         """Gets the total amount of valid examples"""
