@@ -13,7 +13,7 @@ def check_dir_exist():
     if not os.path.exists(VISUALIZATION_DIR):
         os.mkdir(VISUALIZATION_DIR)
 
-def plot_loss(train_losses: list, valid_losses: list, csky_loss_valid: float = None, title: str = 'Training Loss', loss: str = 'mse'):
+def plot_loss(train_losses: list, valid_losses: list, csky_loss_valid: float = None, title: str = 'Training Loss', loss: str = 'RMSE'):
     """
     This function plots the training and validation losses. It can also plot the loss 
     of the clear sky model as a baseline. 
@@ -29,7 +29,7 @@ def plot_loss(train_losses: list, valid_losses: list, csky_loss_valid: float = N
     if csky_loss_valid != None:
         plt.plot([csky_loss_valid]*len(train_losses), label='csky_valid', linestyle='--', color='red')
     plt.xlabel('Epochs')
-    plt.ylabel(f'Loss ({loss})')
+    plt.ylabel(f'{loss}')
     plt.title(title)
     plt.legend()
     

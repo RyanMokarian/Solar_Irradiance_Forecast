@@ -27,10 +27,6 @@ from tensorflow.python.util import nest
 from tensorflow.python.util.tf_export import keras_export
 from tensorflow.tools.docs import doc_controls
 
-
-
-
-
 class DropoutRNNCellMixin(object):
   """Object that hold dropout related fields for RNN Cell.
   This class is not a standalone RNN cell. It suppose to be used with a RNN cell

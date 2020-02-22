@@ -1,6 +1,11 @@
 # solar-irradiance
 Project 1 of course IFT6759 - Advanced projects in machine learning
 
+## How to test the evaluator script
+Check that your configuration is correct in the file eval_user_cfg.json and run the command :
+```
+python evaluator.py output.txt dummy_test_cfg.json -u="eval_user_cfg.json"
+```
 
 ## How to Visualize Training with Tensorboard
 Open an ssh session :
