@@ -9,6 +9,7 @@ import tensorflow as tf
 from tqdm import tqdm
 from models import baselines
 from models.cnn_gru.cnn_gru import CnnGru
+from models.bi_lstm import LSTM_Resnet
 from dataset.datasets import SolarIrradianceDataset
 from dataset.sequence_dataset import SequenceDataset
 from utils import preprocessing
@@ -127,9 +128,11 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     elif model == 'cnndem':
         model = baselines.ConvDemModel(image_size)
     elif model == 'sunset3d':
-        model = baselines.Sunset3DModel(seq_len)
+        model = baselines.Sunset3DModel()
     elif model == 'cnngru':
         model = CnnGru(seq_len)
+    elif model == 'cnnlstm':
+        model = LSTM_Resnet(seq_len)
     else:
         raise Exception(f'Model "{model}" not recognized.')
         
@@ -146,7 +149,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     else:
         raise Exception(f'Optimizer "{optimizer}" not recognized.')
     
-    if model.__class__.__name__ in ['Sunset3DModel', 'CnnGru']: # Temporary if to not break older models
+    if model.__class__.__name__ in ['Sunset3DModel', 'CnnGru','LSTM_Resnet']: # Temporary if to not break older models
         # Create data loader
         dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=30))
         dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, timesteps=datetime.timedelta(minutes=30))
