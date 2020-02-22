@@ -44,8 +44,6 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
         images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
         with tf.GradientTape() as tape:
             preds = model(images)
-            # logger.debug(f'preds : {preds[:10]}')
-            # logger.debug(f'labels : {labels[:10]}')
             if use_csky:
                 preds = preds + csky
             loss = loss_function(y_true=labels, y_pred=preds)
@@ -54,8 +52,6 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
 
         if scale_label:
             preds, labels = preprocessing.unnormalize_ghi(preds), preprocessing.unnormalize_ghi(labels)
-        # logger.debug(f'preds after scale : {preds[:10]}')
-        # logger.debug(f'labels after scale: {labels[:10]}')
 
         train_mse_metric.update_state(y_true=labels, y_pred=preds)
         

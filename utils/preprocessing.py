@@ -32,10 +32,6 @@ def normalize_ghi(df: pd.DataFrame):
     Returns:
         pd.DataFrame -- Dataframe with standardized GHI values
     """
-    # df_observed_ghi = df.filter(regex=("^..._GHI")) # Select only observed GHI columns
-    # mean = df_observed_ghi.stack().mean()
-    # std = df_observed_ghi.stack().std()
-
     df_ghi = df.filter(regex=("_GHI")) # Select all GHI columns
     normalized_df=(df_ghi-data.GHI_MEAN)/data.GHI_STD
 
