@@ -8,6 +8,40 @@ from pathlib import Path
 from tqdm import tqdm
 import math
 import utils
+import tensorflow as tf
+
+def lr_find(model,train_dataset):
+    beta,mv = 0.95,0
+    tloss,best =[],100
+    optimizer = tf.keras.optimizers.Adam()
+    loss_func = tf.keras.losses.MSE
+    lrs = np.logspace(-7,0,150)
+    for i,(lr,data) in enumerate(tqdm(zip(lrs,train_dataset),total=150)):
+        optimizer.lr = lr
+        samples,labels = data['images'],data['ghi']
+        samples = tf.squeeze(samples,axis=1)
+        labels = labels[:,0]
+        labels = (labels - 188.5)/285
+        with tf.GradientTape() as tape:
+            preds = tf.keras.backend.flatten(model(samples,training=True))
+            loss = loss_func(labels,preds)
+        gradients = tape.gradient(loss,model.trainable_variables)
+        optimizer.apply_gradients(zip(gradients,model.trainable_variables))
+
+        mv = (beta*mv + (1-beta)*loss.numpy())
+        av = mv / (1-beta**(i+1))
+        #print(av.shape)
+        best = min(best,av)
+        if  av > 4*best and i > 50:
+            print("broken at: ", i)
+            break
+        tloss.append(av)
+    plt.plot(lrs[:len(tloss)],tloss)
+    plt.xscale('log')
+    plt.ylabel("Loss")
+    plt.xlabel("Learning Rate")
+    plt.show()
+
 
 def show_image(ax,img,title=None):
     """Takes in plt.axs, an image and title and plots the image"""
