@@ -44,7 +44,7 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
     for i, batch in tqdm(enumerate(data_loader), total=(np.ceil(total_examples/batch_size)), desc='train epoch', leave=False):
         images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
         with tf.GradientTape() as tape:
-            preds = model(images)
+            preds = model(images,training=True)
             if use_csky:
                 preds = preds + csky
             loss = loss_function(y_true=labels, y_pred=preds)
@@ -67,7 +67,7 @@ def test_epoch(model, data_loader, batch_size, loss_function, total_examples, sc
 
     for batch in tqdm(data_loader, total=(np.ceil(total_examples/batch_size)), desc='valid epoch', leave=False):
         images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
-        preds = model(images)
+        preds = model(images,training=False)
         if use_csky:
             preds = preds + csky
         if scale_label:
