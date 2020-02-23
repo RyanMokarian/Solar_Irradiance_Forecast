@@ -50,6 +50,9 @@ def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_
             loss = loss_function(y_true=labels, y_pred=preds)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        
+        if i%1000 == 0:
+            print(f'Predictions at {i}: {preds[0]}')
 
         if scale_label:
             preds, labels = preprocessing.unnormalize_ghi(preds), preprocessing.unnormalize_ghi(labels)

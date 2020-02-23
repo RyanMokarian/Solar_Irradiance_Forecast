@@ -157,12 +157,11 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         raise Exception(f'Optimizer "{optimizer}" not recognized.')
     
     # Create data loader
-    dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, 
-    timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
+    dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, batch_size=batch_size,
+    timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
 
-    dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, 
-    timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
-
+    dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, batch_size=batch_size,
+    timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
     
     # Training loop
     logger.info('Training...')
