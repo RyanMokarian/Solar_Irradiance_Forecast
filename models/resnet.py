@@ -5,7 +5,6 @@ import tensorflow as tf
 from tensorflow import keras,data
 from tensorflow.keras import layers,models,activations
 
-
 class IdentityBlock(tf.keras.Model):
     def __init__(self,filters):
         super().__init__()
@@ -60,12 +59,12 @@ class StraightBlock(tf.keras.Model):
 class BottleNeck(tf.keras.Model):
     def __init__(self):
         super().__init__()
-        self.conv = layers.Conv2D(256,1)
+        self.conv = layers.Conv2D(128,1)
         self.bn1 = layers.BatchNormalization()
         self.flatten  = layers.Flatten()
         self.globalmaxpool = layers.GlobalMaxPool2D()
         self.globalavgpool = layers.GlobalAveragePooling2D()
-        self.fc = layers.Dense(256)
+        self.fc = layers.Dense(128)
     def call(self,input,training=False):
         x = self.conv(input)
         x = self.bn1(x,training=training)
