@@ -2,7 +2,6 @@ import os
 import numpy as np
 import pandas as pd
 import pickle
-import random
 
 from utils import data
 
@@ -67,7 +66,7 @@ def shuffle_df(df: pd.DataFrame):
     """
     df['just_date'] = df.index.date
     groups = [df for _, df in df.groupby('just_date')]
-    random.shuffle(groups)
+    np.random.shuffle(groups)
     df = pd.concat(groups).reset_index(drop=False)
     df = df.drop('just_date', axis=1).set_index('iso-datetime')
     return df
