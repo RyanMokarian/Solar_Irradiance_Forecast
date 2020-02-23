@@ -5,20 +5,6 @@ from tensorflow.keras import layers, models, activations
 from models.resnet import CustomResNet
 
 
-class CNN(keras.Model):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = layers.Conv2D(32,3,padding='same',activation='relu')
-        self.conv2 = layers.Conv2D(64,3,padding='same',activation='relu')
-        self.conv3 = layers.Conv2D(128,3,padding='same',activation='relu')
-        self.maxpool = layers.MaxPool2D(strides=2)
-        self.globalpool = layers.GlobalMaxPool2D()
-    def call(self,x):
-        x = self.conv3(self.maxpool(self.conv2(self.maxpool(self.conv1(x)))))
-        x = self.globalpool(x)
-        return x
-
-
 class Encoder(tf.keras.Model):
     def __init__(self,ip_dims):
         super().__init__()
