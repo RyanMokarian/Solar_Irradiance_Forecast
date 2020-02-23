@@ -82,19 +82,17 @@ class CustomResNet(tf.keras.Model):
     def __init__(self):
         super().__init__()
         self.first = StraightBlock(100)
+        self.convblock = ConvBlock(100)
         self.second = StraightBlock(200)
-        self.third = StraightBlock(400)
-        self.identity1 = IdentityBlock(100)        
         self.identity2 = IdentityBlock(200)
-        self.identity3 = IdentityBlock(400)
+        self.third = StraightBlock(200)
         self.bottleneck  = BottleNeck()  
         
     def call(self,input,training=False):
         x = self.first(input,training=training)
-        x = self.identity1(x,training=training)
+        x = self.convblock(x,training=training)
         x = self.second(x,training=training)
         x = self.identity2(x,training=training)
         x = self.third(x,training=training)
-        x = self.identity3(x,training=training)
         x = self.bottleneck(x,training=training)
         return x
