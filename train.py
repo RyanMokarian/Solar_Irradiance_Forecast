@@ -22,9 +22,8 @@ SEED = 1
 DATA_PATH = '/project/cq-training-1/project1/data/'
 HDF5_8BIT = 'hdf5v7_8bit'
 BATCH_LOG_INTERVAL = 50
-VALID_PERC = 0.1
-#SLURM_TMPDIR = os.environ["SLURM_TMPDIR"] if "SLURM_TMPDIR" in os.environ else glob.glob('/localscratch/'+os.environ['USER']+'*')[0]
-SLURM_TMPDIR = '/project/cq-training-1/project1/teams/team12'
+VALID_PERC = 0.2
+SLURM_TMPDIR = os.environ["SLURM_TMPDIR"] if "SLURM_TMPDIR" in os.environ else glob.glob('/localscratch/'+os.environ['USER']+'*')[0]
 
 # Setup writers for tensorboard
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -40,7 +39,7 @@ train_mse_metric = tf.keras.metrics.MeanSquaredError()
 valid_mse_metric = tf.keras.metrics.MeanSquaredError()
 valid_csky_mse_metric = tf.keras.metrics.MeanSquaredError()
 
-def train_epoch(model, data_loader, batch_size ,loss_function, optimizer, total_examples, scale_label, use_csky):
+def train_epoch(model, data_loader, batch_size, loss_function, optimizer, total_examples, scale_label, use_csky):
     train_mse_metric.reset_states()
     for i, batch in tqdm(enumerate(data_loader), total=(np.ceil(total_examples/batch_size)), desc='train epoch', leave=False):
         images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
@@ -51,9 +50,6 @@ def train_epoch(model, data_loader, batch_size ,loss_function, optimizer, total_
             loss = loss_function(y_true=labels, y_pred=preds)
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
-
-        if i%1000 == 0: # Just to check if preds go to nan
-            print(f'Predictions at {i}: {preds[0]}')
 
         if scale_label:
             preds, labels = preprocessing.unnormalize_ghi(preds), preprocessing.unnormalize_ghi(labels)
@@ -71,7 +67,7 @@ def test_epoch(model, data_loader, batch_size, loss_function, total_examples, sc
 
     for batch in tqdm(data_loader, total=(np.ceil(total_examples/batch_size)), desc='valid epoch', leave=False):
         images, labels, csky = batch['images'], batch['ghi'], batch['csky_ghi']
-        preds = model(images, training=False)
+        preds = model(images,training=False)
         if use_csky:
             preds = preds + csky
         if scale_label:
@@ -86,7 +82,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          epochs: int = 20,
          optimizer: str = 'adam' ,
          lr: float = 1e-4 , 
-         batch_size: int = 32,
+         batch_size: int = 100,
          subset_perc: float = 1,
          saved_model_dir: str = None,
          seq_len: int = 6,
@@ -94,7 +90,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          scale_label: bool = True,
          use_csky: bool = False,
          cache: bool = False, 
-         timesteps_minutes: int = 30
+         timesteps_minutes: int = 15
         ):
     
     # Warning if no GPU detected
@@ -111,7 +107,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     # Load dataframe
     logger.info('Loading and preprocessing dataframe...')
     df = pd.read_pickle(df_path)
-    df = preprocessing.preprocess(df, shuffle=True, scale_label=scale_label)
+    df = preprocessing.preprocess(df, shuffle=False, scale_label=scale_label)
     metadata = data.Metadata(df, scale_label)
 
     # Pre-crop data
@@ -157,12 +153,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         raise Exception(f'Optimizer "{optimizer}" not recognized.')
     
     # Create data loader
-    dataloader_train = SequenceDataset(metadata_train, images, seq_len=seq_len, 
-    timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
-
-    dataloader_valid = SequenceDataset(metadata_valid, images, seq_len=seq_len, 
-    timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
-
+    dataloader_train = SequenceDataset(metadata_train, images, seq_len, batch_size, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
+    dataloader_valid = SequenceDataset(metadata_valid, images, seq_len, batch_size, timesteps=datetime.timedelta(minutes=timesteps_minutes), cache=cache)
     
     # Training loop
     logger.info('Training...')
@@ -170,7 +162,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     best_valid_loss = float('inf')
     for epoch in range(epochs):
         train_epoch(model, dataloader_train, batch_size, mse, optimizer, nb_train_examples, scale_label, use_csky)
-        test_epoch(model, dataloader_valid, batch_size ,mse, nb_valid_examples, scale_label, use_csky)
+        test_epoch(model, dataloader_valid, batch_size, mse, nb_valid_examples, scale_label, use_csky)
         train_loss = np.sqrt(train_mse_metric.result().numpy())
         valid_loss = np.sqrt(valid_mse_metric.result().numpy())
         csky_valid_loss = np.sqrt(valid_csky_mse_metric.result().numpy())
