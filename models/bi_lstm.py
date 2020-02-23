@@ -4,21 +4,6 @@ from tensorflow import keras
 from tensorflow.keras import layers, models, activations
 from models.resnet import CustomResNet
 
-
-class CNN(keras.Model):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = layers.Conv2D(32,3,padding='same',activation='relu')
-        self.conv2 = layers.Conv2D(64,3,padding='same',activation='relu')
-        self.conv3 = layers.Conv2D(128,3,padding='same',activation='relu')
-        self.maxpool = layers.MaxPool2D(strides=2)
-        self.globalpool = layers.GlobalMaxPool2D()
-    def call(self,x):
-        x = self.conv3(self.maxpool(self.conv2(self.maxpool(self.conv1(x)))))
-        x = self.globalpool(x)
-        return x
-
-
 class Encoder(tf.keras.Model):
     def __init__(self,ip_dims):
         super().__init__()
@@ -110,10 +95,10 @@ class LSTM_Resnet(tf.keras.Model):
         self.seq_len = seq_len
         self.fc = tf.keras.layers.Dense(final_rep)
         self.decoder_ouput_size = 4
-    def call(self,x):
+    def call(self,x,training=False):
         bs = x.shape[0]
         decoder_input = tf.convert_to_tensor(np.tile(np.arange(self.decoder_ouput_size),(bs,1)))
-        x = self.cnn(x)
+        x = self.cnn(x,training=training)
         enc_output,enc_hidden,enc_cell_state,_,_ = self.encoder(x)
         # enc_output -> bs,seq_len,units
         # enc_hidden -> bs,units
@@ -130,4 +115,4 @@ class LSTM_Resnet(tf.keras.Model):
         final_op = tf.transpose(tf.convert_to_tensor(final_op),perm=(1,0,2))
         final_op = self.fc(final_op)
         all_atten = tf.transpose(tf.convert_to_tensor(all_atten),perm=(1,0,2,3))
-        return final_op
+        return tf.squeeze(final_op)

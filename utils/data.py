@@ -232,6 +232,10 @@ class Metadata(object):
     def get_number_of_examples(self):
         """Gets the total amount of valid examples"""
         return self.df.loc[self.get_timestamps(), self.col_daytime].values.sum()
+    
+    def enc_timestamps(self,stamp):
+        """One hot encoding elements of the timestep"""
+        return [stamp.month-1,stamp.day-1,stamp.hour,[0,15,30,45].index(stamp.minute)]
 
     def __len__(self):
         return len(self.get_timestamps())

@@ -5,7 +5,6 @@ import tensorflow as tf
 from tensorflow import keras,data
 from tensorflow.keras import layers,models,activations
 
-
 class IdentityBlock(tf.keras.Model):
     def __init__(self,filters):
         super().__init__()
@@ -60,12 +59,12 @@ class StraightBlock(tf.keras.Model):
 class BottleNeck(tf.keras.Model):
     def __init__(self):
         super().__init__()
-        self.conv = layers.Conv2D(256,1)
+        self.conv = layers.Conv2D(128,1)
         self.bn1 = layers.BatchNormalization()
         self.flatten  = layers.Flatten()
         self.globalmaxpool = layers.GlobalMaxPool2D()
         self.globalavgpool = layers.GlobalAveragePooling2D()
-        self.fc = layers.Dense(256)
+        self.fc = layers.Dense(128)
     def call(self,input,training=False):
         x = self.conv(input)
         x = self.bn1(x,training=training)
@@ -82,19 +81,17 @@ class CustomResNet(tf.keras.Model):
     def __init__(self):
         super().__init__()
         self.first = StraightBlock(100)
+        self.convblock = ConvBlock(100)
         self.second = StraightBlock(200)
-        self.third = StraightBlock(400)
-        self.identity1 = IdentityBlock(100)        
         self.identity2 = IdentityBlock(200)
-        self.identity3 = IdentityBlock(400)
+        self.third = StraightBlock(200)
         self.bottleneck  = BottleNeck()  
         
     def call(self,input,training=False):
         x = self.first(input,training=training)
-        x = self.identity1(x,training=training)
+        x = self.convblock(x,training=training)
         x = self.second(x,training=training)
         x = self.identity2(x,training=training)
         x = self.third(x,training=training)
-        x = self.identity3(x,training=training)
         x = self.bottleneck(x,training=training)
         return x
