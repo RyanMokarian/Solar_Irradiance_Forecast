@@ -52,7 +52,7 @@ def train_epoch(model, data_loader, batch_size ,loss_function, optimizer, total_
         grads = tape.gradient(loss, model.trainable_variables)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
-        if i%20 == 0:
+        if i%1000 == 0: # Just to check if preds go to nan
             print(f'Predictions at {i}: {preds[0]}')
 
         if scale_label:
@@ -111,7 +111,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     # Load dataframe
     logger.info('Loading and preprocessing dataframe...')
     df = pd.read_pickle(df_path)
-    df = preprocessing.preprocess(df, shuffle=False, scale_label=scale_label)
+    df = preprocessing.preprocess(df, shuffle=True, scale_label=scale_label)
     metadata = data.Metadata(df, scale_label)
 
     # Pre-crop data
