@@ -109,6 +109,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         model = baselines.ConvDemModel(image_size)
     elif model == 'sunset3d':
         model = baselines.Sunset3DModel(seq_len)
+    elif model == 'resnet':
+        model = baselines.ResNetModel()        
     else:
         raise Exception(f'Model \"{model}\" not recognized.')
         
