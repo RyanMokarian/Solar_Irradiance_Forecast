@@ -1,4 +1,5 @@
 # Extra
+dataset_cache/
 saved_model/
 logs/
 visualizations/

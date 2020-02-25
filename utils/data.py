@@ -83,9 +83,9 @@ class Metadata(object):
             dict -- dict were keys are the station names and values are the GHIs.
         """
         if not self.ghis_exist(timestamp):
-            
             median_values = dict(zip(stations.keys(), [self.ghi_median]*len(stations.keys())))
             return median_values, median_values
+
         ghis = dict(zip(stations.keys(), list(self.df.loc[timestamp, self.col_ghi])))
         csky_ghis = dict(zip(stations.keys(), list(self.df.loc[timestamp, self.col_csky])))
         return ghis, csky_ghis
@@ -100,10 +100,10 @@ class Metadata(object):
         Returns:
             tuple -- GHI, Clearsky GHI
         """
-        if timestamp in self.df.index:
-            return self.df.loc[timestamp, station+'_GHI'], self.df.loc[timestamp, station+'_CLEARSKY_GHI']
+        if timestamp in self.df.index and self.df.loc[timestamp, station+'_GHI'] is not np.NaN:
+            return self.df.loc[timestamp, station+'_GHI'], self.get_clearsky(timestamp, station)
         else:
-            return self.ghi_median, self.ghi_median
+            return self.ghi_median, self.get_clearsky(timestamp, station)
 
     def get_clearsky(self, timestamp: datetime, station: str):
         """Gets the Clearsky GHI ONLY. This method is used in the evaluator dataset when
@@ -116,7 +116,7 @@ class Metadata(object):
         Returns:
             float -- Clearsky GHI
         """
-        if timestamp in self.df.index and not self.df.loc[timestamp, self.col_csky].isna().any():
+        if timestamp in self.df.index and self.df.loc[timestamp, station+'_CLEARSKY_GHI'] is not np.NaN:
             return self.df.loc[timestamp, station+'_CLEARSKY_GHI']
         else:
             return self.ghi_median
@@ -200,8 +200,8 @@ class Metadata(object):
         cutoff = int(len(index)*(1-valid_perc))
         return Metadata(self.df.loc[index[:cutoff]], self.scale_label), Metadata(self.df.loc[index[cutoff:]], self.scale_label)
 
-    def split_with_dates(self, dates: list = ['2013-01','2014-06','2012-08','2011-03','2010-10']):
-        """Splits the data into a training and validation set. Uses the dates in the validation set.
+    def split_with_dates(self, train_dates: list = ['2014'], valid_dates: list = ['2015-01','2015-03','2015-05','2015-07','2015-09','2015-11']):
+        """Splits the data into a training and validation set using the date lists.
         
         Arguments:
             dates {list} -- List of string dates in the YYYYMM format. (default: {['2013-01','2014-06','2012-08','2011-03','2010-10']})
@@ -209,23 +209,24 @@ class Metadata(object):
         Returns:
             tuple -- Tuple of data.Metadata objects. Respectively train and validation.
         """
-        train_idx, valid_idx = [], []
-        for date in dates:
-            if len(date) == 4:
-                for index in self.get_timestamps():
-                    if date == str(index.year):
-                        valid_idx.append(index)
-                    else:
-                        train_idx.append(index)
-            elif len(date) == 7:
-                year, month = date.split('-')
-                for index in self.get_timestamps():
-                    if year == str(index.year) and month == str(index.month):
-                        valid_idx.append(index)
-                    else:
-                        train_idx.append(index)
-            else:
-                logger.error(f'Date format not recognised : {date}')
+        def get_subset_indexes(dates: list):
+            idx = []
+            for date in dates:
+                if len(date) == 4:
+                    for index in self.get_timestamps():
+                        if date == str(index.year):
+                            idx.append(index)
+                elif len(date) == 7:
+                    year, month = date.split('-')
+                    for index in self.get_timestamps():
+                        if year == str(index.year) and int(month) == index.month:
+                            idx.append(index)
+                else:
+                    logger.error(f'Date format not recognised : {date}')
+            return idx
+        
+        train_idx = get_subset_indexes(train_dates)
+        valid_idx = get_subset_indexes(valid_dates)
             
         return Metadata(self.df.loc[train_idx], self.scale_label), Metadata(self.df.loc[valid_idx], self.scale_label)
     
