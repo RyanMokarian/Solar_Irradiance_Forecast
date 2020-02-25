@@ -132,6 +132,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         model = baselines.Sunset3DModel()
     elif model == 'convlstm':
         model = baselines.ConvLSTM()
+    elif model == 'convolutionallstm':
+        model = baselines.ConvolutionalLSTM()
     elif model == 'cnngru':
         model = CnnGru(seq_len)
     elif model == 'cnnlstm':

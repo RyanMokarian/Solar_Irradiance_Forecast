@@ -125,19 +125,64 @@ class ConvLSTM(tf.keras.Model):
         self.dense3 = layers.Dense(4, activation=None)
     
     def call(self, inputs):
-        # print('intput shape : ', inputs.shape)
+        print('intput shape : ', inputs.shape)
         x = self.average_pool(inputs)
-        # print('after avg pooling : ', x.shape)
+        print('after avg pooling : ', x.shape)
         x = self.conv1(inputs)
-        # print('after conv1 : ', x.shape)
+        print('after conv1 : ', x.shape)
         x = self.conv2(x)
-        #print('after conv2 : ', x.shape)
+        print('after conv2 : ', x.shape)
         x = self.conv3(x)
-        #print('after conv23 : ', x.shape)
+        print('after conv23 : ', x.shape)
         x = self.flatten(x)
-        #print('after flatten : ', x.shape)
+        print('after flatten : ', x.shape)
         x = self.dense1(x)
         x = self.dense2(x)
         x = self.dense3(x)
+        return x
+    
+
+class ConvolutionalLSTM(tf.keras.Model):
+    def __init__(self):
+        super(ConvolutionalLSTM, self).__init__()
+        self.average_pool = layers.TimeDistributed(layers.AveragePooling2D(pool_size=(4, 4)))
+        self.conv1 = layers.Conv2D(32, (3, 3), activation='relu', padding='same')
+        self.conv2 = layers.Conv2D(64, (3, 3), activation='relu', padding='same')
+        self.conv3 = layers.Conv2D(64, (3, 3), activation='relu', padding='same')
+        self.maxpooling = layers.MaxPool2D(pool_size=(2, 2))
+        self.flatten = layers.Flatten()
+        self.droppedout = layers.Dropout(0.2)
+        self.dense = layers.Dense(1, activation=None)
+        self.lstm = layers.LSTM(576, return_sequences=True) # input_shape=(48, 48, 5)
+
+    def call(self, inputs):
+        print('intput shape : ', inputs.shape)
+        x = self.average_pool(inputs)
+        # Conv block 1:
+        print('after avg pooling  : ', inputs.shape)
+        # Conv block 1:
+        x = self.conv1(inputs)  # 48x48x5 input convs to 48x48x32
+        x = self.maxpooling(x)  # 48x48x32 maxpools to 24x24x32
+
+        # Conv block 2
+        x = self.conv2(x)  # 24x24x32 convs to 24x24x32
+        x = self.maxpooling(x)  # 24x24x32 maxpools to 12x12x64
+
+        # Conv block 3
+        x = self.conv3(x)  # 12x12x64 convs to 12x12x64
+        x = self.maxpooling(x)  # 12x12x64 maxpools to 6x6x64
+
+        # Conv block 4
+        x = self.conv3(x)  # 6x6x64 convs to 6x6x64
+        x = self.maxpooling(x)  # 6x6x64 maxpools to 3x3x64
+
+        # Flatten, dropped out (%20) & output
+        x = self.flatten(x)
+        x = self.droppedout(x)
+        x = self.dense(x)
+        
+        # LSTM
+        x = self.lstm(x)
+
         return x
 
