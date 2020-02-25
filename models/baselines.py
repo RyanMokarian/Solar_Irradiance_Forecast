@@ -153,36 +153,45 @@ class ConvolutionalLSTM(tf.keras.Model):
         self.flatten = layers.Flatten()
         self.droppedout = layers.Dropout(0.2)
         self.dense = layers.Dense(1, activation=None)
-        self.lstm = layers.LSTM(576, return_sequences=True) # input_shape=(48, 48, 5)
+        self.lstm = layers.LSTM(4, return_sequences=True)
 
     def call(self, inputs):
         print('intput shape : ', inputs.shape)
         x = self.average_pool(inputs)
         # Conv block 1:
         print('after avg pooling  : ', inputs.shape)
-        # Conv block 1:
-        x = self.conv1(inputs)  # 48x48x5 input convs to 48x48x32
-        x = self.maxpooling(x)  # 48x48x32 maxpools to 24x24x32
+        # Conv block 1:        
+        x = self.conv1(inputs)   # 32x32x5 input convs to 32x32x32
+        print('after conv1 : ', x.shape)
+        x = self.maxpooling(x)   # 32x32x32 maxpools to 16x16x32
+        print('after conv1 maxpooling : ', x.shape)
 
         # Conv block 2
-        x = self.conv2(x)  # 24x24x32 convs to 24x24x32
-        x = self.maxpooling(x)  # 24x24x32 maxpools to 12x12x64
-
-        # Conv block 3
-        x = self.conv3(x)  # 12x12x64 convs to 12x12x64
-        x = self.maxpooling(x)  # 12x12x64 maxpools to 6x6x64
-
-        # Conv block 4
-        x = self.conv3(x)  # 6x6x64 convs to 6x6x64
-        x = self.maxpooling(x)  # 6x6x64 maxpools to 3x3x64
-
+        x = self.conv2(x)        # 16x16x32 convs to 16x16x32
+        print('after conv2 : ', x.shape)
+        x = self.maxpooling(x)   # 16x16x32 maxpools to 8x8x64
+        print('after conv2 maxpooling : ', x.shape)
+        # Conv block 3        
+        x = self.conv3(x)        # 8x8x64 convs to 8x8x64
+        print('after conv3 : ', x.shape)
+        x = self.maxpooling(x)   # 8x8x64 maxpools to 4x4x64
+        print('after conv3 maxpooling : ', x.shape)
+        
+        # Conv block 4        
+        x = self.conv3(x)        # 4x4x64 convs to 4x4x64        
+        print('after another conv3 : ', x.shape)
+        
         # Flatten, dropped out (%20) & output
-        x = self.flatten(x)
+        x = self.flatten(x)      
+        print('after flatten : ', x.shape)
         x = self.droppedout(x)
+        print('after droppedout : ', x.shape)		
         x = self.dense(x)
+        print('after dense : ', x.shape)
         
         # LSTM
         x = self.lstm(x)
-
+        print('after lstm : ', x.shape)
+		
         return x
 
