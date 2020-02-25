@@ -81,15 +81,16 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          model: str = 'dummy',
          epochs: int = 20,
          optimizer: str = 'adam' ,
-         lr: float = 1e-4 , 
+         lr: float = 1e-4, 
          batch_size: int = 100,
          subset_perc: float = 1,
+         subset_dates: bool = False,
          saved_model_dir: str = None,
          seq_len: int = 6,
          seed: bool = True,
          scale_label: bool = True,
          use_csky: bool = False,
-         cache: bool = False, 
+         cache: bool = True, 
          timesteps_minutes: int = 15
         ):
     
@@ -98,6 +99,9 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         logger.warning('No GPU detected, training will run on CPU.')
     elif len(tf.config.list_physical_devices('GPU')) > 1:
         logger.warning('Multiple GPUs detected, training will run on only one GPU.')
+        
+    if subset_dates and subset_perc != 1:
+        raise Exception(f'Invalid configuration. Argument --subset_dates=True and --subset_perc={subset_perc}.')
 
     # Set random seed
     if seed:
@@ -116,8 +120,11 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     images.crop(dest=SLURM_TMPDIR)
 
     # Split into train and valid
-    metadata, _ = metadata.split(1-subset_perc)
-    metadata_train, metadata_valid = metadata.split(VALID_PERC)
+    if subset_dates:
+        metadata_train, metadata_valid = metadata.split_with_dates()
+    else:
+        metadata, _ = metadata.split(1-subset_perc)
+        metadata_train, metadata_valid = metadata.split(VALID_PERC)
     nb_train_examples, nb_valid_examples = metadata_train.get_number_of_examples(), metadata_valid.get_number_of_examples()
     logger.info(f'Number of training examples : {nb_train_examples}, number of validation examples : {nb_valid_examples}')
 
