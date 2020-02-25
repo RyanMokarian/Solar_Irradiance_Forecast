@@ -1,3 +1,4 @@
+import os
 import datetime
 import numpy as np
 import tensorflow as tf
@@ -5,6 +6,9 @@ import typing
 import logging
 from datetime import timedelta
 from utils import data
+from utils import utils
+
+DATASET_CACHE_PATH = 'dataset_cache'
 
 logger = logging.getLogger('logger')
 
@@ -23,7 +27,8 @@ class SequenceDataset(tf.data.Dataset):
                                                            'csky_ghi': tf.TensorShape([4]),
                                                            'ghi': tf.TensorShape([4])}).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
         if cache:
-            return dataset.cache()
+            utils.create_folder(DATASET_CACHE_PATH)
+            return dataset.cache(filename=os.path.join(DATASET_CACHE_PATH, f'cache_seqlen_{seq_len}_imagesize_{images.image_size}_batchsize_{batch_size}_nbexamples_{metadata.get_number_of_examples()}'))
         else:
             return dataset
 
