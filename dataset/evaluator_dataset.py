@@ -17,7 +17,9 @@ class EvaluatorDataset(tf.data.Dataset):
 
     def __new__(cls, metadata: data.Metadata, image_size: int, seq_len: int, target_datetimes: list, stations: dict, target_time_offsets: list, timesteps: typing.Union[list, timedelta] = timedelta(minutes=15), batch=10):
         return tf.data.Dataset.from_generator(DataGenerator(metadata, image_size, seq_len, timesteps, target_datetimes, stations, target_time_offsets).get_next_example,
-                                              output_types=(tf.float32, tf.float32)).prefetch(tf.data.experimental.AUTOTUNE).batch(batch)
+                                              output_types=({'images': tf.float32,
+                                                            'csky_ghi': tf.float32},
+                                                            tf.float32)).prefetch(tf.data.experimental.AUTOTUNE).batch(batch)
 
 class DataGenerator(object):
     """Generator that yields sequences of examples."""
@@ -46,7 +48,9 @@ class DataGenerator(object):
                     csky_ghi = self.metadata.get_clearsky(timestamp, station_name)
                     csky_seq.append(csky_ghi)
 
-                yield np.array(img_seq), None # Targets are None because they are not available for the evaluation.
+                yield ({'images': np.array(img_seq),
+                        'csky_ghi': np.array(csky_seq)},
+                        None) # Targets are None because they are not available for the evaluation.
 
 class ImageReader(object):
     """Class that reads images encoded in HDF5 files."""
@@ -85,7 +89,6 @@ class ImageReader(object):
         adjustement = self.image_size % 2 # Adjustement if image_size is odd
         cropped_images = []
         for img, mean, std in zip(images, data.images_mean.values(), data.images_std.values()):
-            # TODO : Check if the slice is out of bounds
             img = (img - mean)/std # Normalize image
             cropped_images.append(img[pixel_coords[0]-pixels:pixel_coords[0]+pixels+adjustement,
                                 pixel_coords[1]-pixels:pixel_coords[1]+pixels+adjustement])
