@@ -1,7 +1,8 @@
 {
   "image_size": 32,
   "seq_len": 6,
-  "timesteps_minutes": 15,
-  "scale_label": false,
-  "model_name": "sunset3d"
+  "timesteps_minutes": 30,
+  "scale_label": true,
+  "model_name": "sunset3d",
+  "use_csky": true
 }

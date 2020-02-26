@@ -75,39 +75,11 @@ Submitting
 
     # Load dataframe
     dataframe = preprocessing.preprocess(dataframe, shuffle=False, scale_label=scale_label)
-    metadata = data.Metadata(dataframe)
+    metadata = data.Metadata(dataframe, scale_label)
     
     # Build dataloader
     data_loader = EvaluatorDataset(metadata, image_size=image_size, seq_len=seq_len, timesteps=timesteps, 
                                    target_datetimes=target_datetimes, stations=stations, target_time_offsets=target_time_offsets)
-
-
-    # TODO : Dummy dataloader to be deleted.
-    # 
-    # def dummy_data_generator():
-    #     """
-    #     Generate dummy data for the model, only for example purposes.
-    #     """
-    #     batch_size = 32
-    #     image_dim = (64, 64)
-    #     n_channels = 5
-    #     output_seq_len = 4
-
-    #     for i in range(0, len(target_datetimes), batch_size):
-    #         batch_of_datetimes = target_datetimes[i:i+batch_size]
-    #         samples = tf.random.uniform(shape=(
-    #             len(batch_of_datetimes), image_dim[0], image_dim[1], n_channels
-    #         ))
-    #         targets = tf.zeros(shape=(
-    #             len(batch_of_datetimes), output_seq_len
-    #         ))
-    #         # Remember that you do not have access to the targets.
-    #         # Your dataloader should handle this accordingly.
-    #         yield samples, targets
-
-    # data_loader = tf.data.Dataset.from_generator(
-    #     dummy_data_generator, (tf.float32, tf.float32)
-    # )
 
     return data_loader
 
@@ -146,24 +118,25 @@ Submitting
     # Load model weights
     model.load_weights(os.path.join(utils.SAVED_MODEL_DIR, model.__class__.__name__, "model"))
 
-    # TODO : Remove dummy model
-    #
-    # class DummyModel(tf.keras.Model):
+    class EvaluationModel(tf.keras.Model):
+        """Model wrapper only for evaluation purposes."""
+        def __init__(self, model, scale_label, use_csky):
+            super(EvaluationModel, self).__init__()
+            self.model = model
+            self.scale_label = scale_label
+            self.use_csky = use_csky
 
-    #   def __init__(self, target_time_offsets):
-    #     super(DummyModel, self).__init__()
-    #     self.flatten = tf.keras.layers.Flatten()
-    #     self.dense1 = tf.keras.layers.Dense(32, activation=tf.nn.relu)
-    #     self.dense2 = tf.keras.layers.Dense(len(target_time_offsets), activation=tf.nn.softmax)
+        def call(self, input_dict):
+            csky = input_dict['csky_ghi']
+            inputs = input_dict['images']
+            x = self.model(inputs)
+            if self.use_csky:
+                x += csky
+            if self.scale_label:
+                x = preprocessing.unnormalize_ghi(x)
+            return x
 
-    #   def call(self, inputs):
-    #     x = self.dense1(self.flatten(inputs))
-    #     return self.dense2(x)
-
-    # model = DummyModel(target_time_offsets)
-
-    return model
-
+    return EvaluationModel(model, config['scale_label'], config['use_csky'])
 
 def generate_predictions(data_loader: tf.data.Dataset, model: tf.keras.Model, pred_count: int) -> np.ndarray:
     """Generates and returns model predictions given the data prepared by a data loader."""
@@ -185,7 +158,6 @@ def generate_predictions(data_loader: tf.data.Dataset, model: tf.keras.Model, pr
             predictions.append(pred)
             pbar.update(len(pred))
     return np.concatenate(predictions, axis=0)
-
 
 def generate_all_predictions(
         target_stations: typing.Dict[typing.AnyStr, typing.Tuple[float, float, float]],
