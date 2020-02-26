@@ -1,0 +1,7 @@
+{
+  "image_size": 32,
+  "seq_len": 6,
+  "timesteps_minutes": 15,
+  "scale_label": false,
+  "model_name": "sunset3d"
+}

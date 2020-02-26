@@ -1,8 +1,10 @@
 # Extra
+dataset_cache/
 saved_model/
 logs/
 visualizations/
 *.ipynb
+*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
