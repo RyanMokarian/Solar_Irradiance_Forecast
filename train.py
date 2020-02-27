@@ -143,6 +143,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         model = CnnGru(seq_len)
     elif model == 'cnnlstm':
         model = LSTM_Resnet(seq_len)
+    elif model == 'resnet':
+        model = baselines.ResNetModel()
     else:
         raise Exception(f'Model "{model}" not recognized.')
         
