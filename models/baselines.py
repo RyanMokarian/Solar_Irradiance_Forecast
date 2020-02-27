@@ -1,5 +1,5 @@
-import numpy as np
 import tensorflow as tf
+import numpy as np
 from numpy import moveaxis
 from numpy import asarray
 from tensorflow.keras import layers
@@ -126,28 +126,26 @@ class ConvLSTM(tf.keras.Model):
         self.dense3 = layers.Dense(4, activation=None)
     
     def call(self, inputs):
-        # print('intput shape : ', inputs.shape)
         x = self.average_pool(inputs)
-        # print('after avg pooling : ', x.shape)
         x = self.conv1(inputs)
-        # print('after conv1 : ', x.shape)
         x = self.conv2(x)
-        #print('after conv2 : ', x.shape)
         x = self.conv3(x)
-        #print('after conv23 : ', x.shape)
         x = self.flatten(x)
-        #print('after flatten : ', x.shape)
         x = self.dense1(x)
         x = self.dense2(x)
         x = self.dense3(x)
         return x
 
 class ResNetModel(tf.keras.Model):
-    def __init__(self):
+    def __init__(self, resnet_weights_path='pretrained_models/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'):
         super(ResNetModel, self).__init__()
-        resnet_weights_path = '../solar-irradiance/pretrained_models/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
         self.resnet50 = ResNet50(include_top = False, weights = resnet_weights_path)
         self.new_resnet = ResNet50(weights=None, input_shape=(32, 32, 5), include_top=False)
+        self.flatten = tf.keras.layers.Flatten()
+        self.droppedout = tf.keras.layers.Dropout(0.2)
+        self.dense = tf.keras.layers.Dense(1, activation=None)
+
+    def build(self, input_shape):
         for i, (new_layer, layer) in enumerate(zip(self.new_resnet.layers[1:], self.resnet50.layers[1:])):
             if i == 1:
                 new_weights = np.zeros((7, 7, 5, 64))
@@ -157,12 +155,9 @@ class ResNetModel(tf.keras.Model):
                 new_layer.set_weights([new_weights,original_weights[1]])
                 continue
             new_layer.set_weights(layer.get_weights())
-        self.flatten = tf.keras.layers.Flatten()
-        self.droppedout = tf.keras.layers.Dropout(0.2)
-        self.dense = tf.keras.layers.Dense(1, activation=None)
         
     def call(self, inputs): 
-        x = inputs[:,0,:,:,:] # Only consider T0
+        x = inputs[:,-1,:,:,:] # Only consider T0
         
         x = self.new_resnet(x)
         x = self.flatten(x)      

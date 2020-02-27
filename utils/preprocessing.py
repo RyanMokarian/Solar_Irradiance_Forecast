@@ -1,7 +1,8 @@
 import os
+import pickle
+
 import numpy as np
 import pandas as pd
-import pickle
 
 from utils import data
 
@@ -37,8 +38,6 @@ def normalize_ghi(df: pd.DataFrame):
     pd.options.mode.chained_assignment = None # Disable chained_assignment warning for the update operation
     df.update(normalized_df) # Replace normalized columns in the original dataframe
     pd.options.mode.chained_assignment = 'warn' # Turn warning back on
-
-    # TODO : Save mean and std to inverse normalization of predictions later
     
     return df
 

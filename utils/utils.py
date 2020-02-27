@@ -4,6 +4,7 @@ import math
 import os
 import typing
 import warnings
+import shutil
 
 import cv2 as cv
 import h5py
@@ -13,7 +14,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import shutil
 from tqdm import tqdm
 
 SAVED_MODEL_DIR = 'saved_model'

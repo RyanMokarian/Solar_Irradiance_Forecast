@@ -1,10 +1,12 @@
 import os
 import datetime
-import numpy as np
-import tensorflow as tf
 import typing
 import logging
 from datetime import timedelta
+
+import numpy as np
+import tensorflow as tf
+
 from utils import data
 from utils import utils
 
