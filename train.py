@@ -9,6 +9,7 @@ import tensorflow as tf
 from tqdm import tqdm
 from models import baselines
 from models.cnn_gru.cnn_gru import CnnGru
+from models.cnn_gru.cnn_gru_att import CnnGruAtt
 from models.bi_lstm import LSTM_Resnet
 from dataset.datasets import SolarIrradianceDataset
 from dataset.sequence_dataset import SequenceDataset
@@ -141,6 +142,8 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
         model = baselines.ConvLSTM()
     elif model == 'cnngru':
         model = CnnGru(seq_len)
+    elif model == 'cnngruatt':
+        model = CnnGruAtt(seq_len)
     elif model == 'cnnlstm':
         model = LSTM_Resnet(seq_len)
     elif model == 'resnet':
