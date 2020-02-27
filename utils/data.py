@@ -200,7 +200,7 @@ class Metadata(object):
         cutoff = int(len(index)*(1-valid_perc))
         return Metadata(self.df.loc[index[:cutoff]], self.scale_label), Metadata(self.df.loc[index[cutoff:]], self.scale_label)
 
-    def split_with_dates(self, train_dates: list = ['2014'], valid_dates: list = ['2015-01','2015-03','2015-05','2015-07','2015-09','2015-11']):
+    def split_with_dates(self, train_dates: list = ['2010','2011','2012','2013','2014',], valid_dates: list = ['2015']):
         """Splits the data into a training and validation set using the date lists.
         
         Arguments:

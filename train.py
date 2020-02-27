@@ -8,7 +8,8 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 from models import baselines
-from models.cnn_gru.cnn_gru import CnnGru
+#from models.cnn_gru.cnn_gru import CnnGru
+from models.cnn_gru.simple_gru import SimpleGru
 from models.bi_lstm import LSTM_Resnet
 from dataset.datasets import SolarIrradianceDataset
 from dataset.sequence_dataset import SequenceDataset
@@ -81,7 +82,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
          model: str = 'dummy',
          epochs: int = 20,
          optimizer: str = 'adam' ,
-         lr: float = 1e-4, 
+         lr: float = 3e-4, 
          batch_size: int = 100,
          subset_perc: float = 1,
          subset_dates: bool = False,
@@ -140,7 +141,7 @@ def main(df_path: str = '/project/cq-training-1/project1/data/catalog.helios.pub
     elif model == 'convlstm':
         model = baselines.ConvLSTM()
     elif model == 'cnngru':
-        model = CnnGru(seq_len)
+        model = SimpleGru(seq_len)
     elif model == 'cnnlstm':
         model = LSTM_Resnet(seq_len)
     else:

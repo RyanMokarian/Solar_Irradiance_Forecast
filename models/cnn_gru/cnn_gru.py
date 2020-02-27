@@ -151,4 +151,4 @@ class CnnGru(tf.keras.Model):
         final_op = self.fc(final_op)
         all_atten = tf.transpose(tf.convert_to_tensor(all_atten),perm=(1,0,2,3))
 
-        return final_op
+        return tf.squeeze(final_op)

@@ -40,7 +40,7 @@ class DataGenerator(object):
         self.metadata = metadata
         self.images = images
         self.timesteps = [timesteps*i for i in range(seq_len)] if type(timesteps) == timedelta else timesteps
-
+        self.timesteps.reverse()
     def get_next_example(self):
         
         for time in self.metadata.get_timestamps():
