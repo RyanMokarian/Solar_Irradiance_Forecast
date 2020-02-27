@@ -1,8 +1,9 @@
+import numpy as np
 import tensorflow as tf
 from numpy import moveaxis
 from numpy import asarray
 from tensorflow.keras import layers
-
+from tensorflow.keras.applications.resnet50 import ResNet50
 
 class DummyModel(tf.keras.Model):
     def __init__(self):
@@ -141,3 +142,30 @@ class ConvLSTM(tf.keras.Model):
         x = self.dense3(x)
         return x
 
+class ResNetModel(tf.keras.Model):
+    def __init__(self):
+        super(ResNetModel, self).__init__()
+        resnet_weights_path = '../solar-irradiance/pretrained_models/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+        self.resnet50 = ResNet50(include_top = False, weights = resnet_weights_path)
+        self.new_resnet = ResNet50(weights=None, input_shape=(32, 32, 5), include_top=False)
+        for i, (new_layer, layer) in enumerate(zip(self.new_resnet.layers[1:], self.resnet50.layers[1:])):
+            if i == 1:
+                new_weights = np.zeros((7, 7, 5, 64))
+                original_weights = np.array(layer.get_weights())
+                new_weights[:, :, 0:3, :] = original_weights[0][:, :, :3, :]
+                new_weights[:, :, 3:5, :] = original_weights[0][:, :, :2, :]
+                new_layer.set_weights([new_weights,original_weights[1]])
+                continue
+            new_layer.set_weights(layer.get_weights())
+        self.flatten = tf.keras.layers.Flatten()
+        self.droppedout = tf.keras.layers.Dropout(0.2)
+        self.dense = tf.keras.layers.Dense(1, activation=None)
+        
+    def call(self, inputs): 
+        x = inputs[:,0,:,:,:] # Only consider T0
+        
+        x = self.new_resnet(x)
+        x = self.flatten(x)      
+        x = self.droppedout(x)
+        x = self.dense(x)
+        return x    
