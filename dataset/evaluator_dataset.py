@@ -1,11 +1,11 @@
-import numpy as np
 import typing
 import datetime
+from datetime import timedelta
 
+import numpy as np
 import tensorflow as tf
 import h5py
 
-from datetime import timedelta
 from utils import utils
 from utils import data
 from utils import logging

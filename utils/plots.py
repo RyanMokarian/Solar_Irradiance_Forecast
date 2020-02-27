@@ -1,9 +1,10 @@
 import os
+import pickle
+from datetime import datetime
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datetime import datetime
-import pickle
 
 sns.set() # matplotlib plots are more beautiful with seaborn ッ
 
