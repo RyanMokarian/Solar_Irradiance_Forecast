@@ -3,6 +3,8 @@ dataset_cache/
 saved_model/
 logs/
 visualizations/
+pretrained_models/
+*.h5
 *.ipynb
 *.txt
 
