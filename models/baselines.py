@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from numpy import moveaxis
 from numpy import asarray
 from tensorflow.keras import layers
@@ -133,7 +134,9 @@ class ResNetModel(tf.keras.Model):
         self.dense = tf.keras.layers.Dense(1, activation=None)
         
     def call(self, inputs): 
-        x = self.new_resnet(inputs)
+        x = inputs[:,0,:,:,:] # Only consider T0
+        
+        x = self.new_resnet(x)
         x = self.flatten(x)      
         x = self.droppedout(x)
         x = self.dense(x)
