@@ -12,4 +12,4 @@ energy continue to expand. In this project, various deep learning
 approaches (Convolutional Neural Network 2D and 3D, LSTM, GRU and Attention) compared
 for the task of solar irradiance nowcasting at a speciﬁc location using
 satellite imagery. The best RMSE by implicitly using the Clearsky model
-to predict GHI was obtained. For details, refer to the uploaded Manuscript.
+to predict GHI was obtained. For details, refer to Solar_Irradiance_Prediction.pdf.
